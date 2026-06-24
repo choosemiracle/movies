@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { movieCatalog } from './movieCatalog';
 import { doubanMovieInfo } from './doubanMovieInfo';
+import { movieInfo } from './movieInfo';
 
 const themeTranslations = {
   Abandonment: '被遗弃感',
@@ -134,6 +135,7 @@ const themeTranslations = {
 const translateTheme = (theme) => themeTranslations[theme] || theme;
 
 const doubanInfoById = new Map(doubanMovieInfo.map((movie) => [movie.id, movie]));
+const movieInfoById = new Map(movieInfo.map((movie) => [movie.id, movie]));
 
 const normalizeMovieTitle = (title) =>
   title.replace(/^(.+),\s*(The|A|An)$/i, '$2 $1');
@@ -211,6 +213,11 @@ const knownChineseTitles = {
 };
 
 const getChineseTitle = (movie) => {
+  const pdfInfo = movieInfoById.get(movie.id);
+  if (pdfInfo?.titleCn) {
+    return pdfInfo.titleCn;
+  }
+
   const doubanInfo = doubanInfoById.get(movie.id);
   if (doubanInfo?.titleCn) {
     return doubanInfo.titleCn;
@@ -225,6 +232,11 @@ const getChineseTitle = (movie) => {
 };
 
 const getMovieIntro = (movie) => {
+  const pdfInfo = movieInfoById.get(movie.id);
+  if (pdfInfo?.summary) {
+    return pdfInfo.summary;
+  }
+
   const themes = movie.themes.slice(0, 3).map(translateTheme).join('、') || '内在探索';
   const doubanInfo = doubanInfoById.get(movie.id);
   const doubanLead = doubanInfo?.doubanTitle
@@ -259,12 +271,15 @@ const getPracticeSteps = (movie) => {
 const enrichMovie = (movie) => ({
   ...movie,
   douban: doubanInfoById.get(movie.id) || null,
+  pdfInfo: movieInfoById.get(movie.id) || null,
+  doubanSearchUrl: `https://movie.douban.com/subject_search?search_text=${encodeURIComponent(normalizeMovieTitle(movie.title))}&cat=1002`,
   titleCn: getChineseTitle(movie),
   intro: getMovieIntro(movie),
   focus: getMovieFocus(movie),
   practices: getPracticeSteps(movie),
   hasVerifiedChineseTitle: Boolean(
     doubanInfoById.get(movie.id)?.titleCn ||
+      movieInfoById.get(movie.id)?.titleCn ||
       knownChineseTitles[movie.title] ||
       knownChineseTitles[normalizeMovieTitle(movie.title)],
   ),
@@ -945,7 +960,7 @@ function App() {
                   </p>
                   {!selectedMovie.douban && (
                     <p className="mt-3 text-xs leading-6 text-[#8a7a66]">
-                      这部影片暂未匹配到高置信豆瓣条目，中文名和豆瓣链接需要后续校对。
+                      这部影片暂未匹配到高置信豆瓣条目，可通过豆瓣搜索继续校对。
                     </p>
                   )}
                 </section>
@@ -1016,6 +1031,16 @@ function App() {
                       rel="noreferrer"
                     >
                       打开豆瓣条目 <ArrowRight size={16} />
+                    </a>
+                  )}
+                  {!selectedMovie.douban && (
+                    <a
+                      className="inline-flex items-center justify-center gap-2 bg-[#17231f] px-5 py-3 text-sm font-bold text-white hover:bg-[#263a34]"
+                      href={selectedMovie.doubanSearchUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      在豆瓣搜索 <ArrowRight size={16} />
                     </a>
                   )}
                   <button
