@@ -268,6 +268,46 @@ const getPracticeSteps = (movie) => {
   ];
 };
 
+const getMoviePoster = (movie) => {
+  const doubanInfo = doubanInfoById.get(movie.id);
+  if (doubanInfo?.doubanCover) return doubanInfo.doubanCover;
+
+  const featured = featuredMovies.find(
+    (item) => item.title === getChineseTitle(movie) || item.title === normalizeMovieTitle(movie.title),
+  );
+  return featured?.image || '';
+};
+
+const getVisualAccent = (movie) => {
+  const palettes = [
+    'linear-gradient(135deg, #17231f 0%, #315046 58%, #d6a647 100%)',
+    'linear-gradient(135deg, #22233a 0%, #54455f 58%, #c79b57 100%)',
+    'linear-gradient(135deg, #2f2018 0%, #72533d 58%, #d7bc7c 100%)',
+    'linear-gradient(135deg, #183142 0%, #3a6d77 58%, #d4a24b 100%)',
+    'linear-gradient(135deg, #281d2b 0%, #62475f 58%, #d6a647 100%)',
+  ];
+  const index = Number(movie.id || 0) % palettes.length;
+  return palettes[index];
+};
+
+const getSceneClues = (movie) => {
+  const themes = movie.themes.map(translateTheme);
+  return [
+    {
+      title: '开场处境',
+      text: `留意主角最初如何面对「${themes[0] || '当下处境'}」，那通常也是我们进入故事的内在入口。`,
+    },
+    {
+      title: '关系张力',
+      text: `观察人物在冲突中如何防御、靠近或逃避，尤其是与「${themes[1] || '关系'}」相关的片段。`,
+    },
+    {
+      title: '转化时刻',
+      text: `寻找一个让角色放下旧认知的瞬间，把它作为观影后的操练画面。`,
+    },
+  ];
+};
+
 const enrichMovie = (movie) => ({
   ...movie,
   douban: doubanInfoById.get(movie.id) || null,
@@ -277,6 +317,9 @@ const enrichMovie = (movie) => ({
   intro: getMovieIntro(movie),
   focus: getMovieFocus(movie),
   practices: getPracticeSteps(movie),
+  poster: getMoviePoster(movie),
+  visualAccent: getVisualAccent(movie),
+  sceneClues: getSceneClues(movie),
   hasVerifiedChineseTitle: Boolean(
     doubanInfoById.get(movie.id)?.titleCn ||
       movieInfoById.get(movie.id)?.titleCn ||
@@ -694,8 +737,28 @@ function App() {
                 {pagedMovies.map((movie) => (
                   <article
                     key={movie.id}
-                    className="grid gap-4 border-b border-[#eadfD1] p-5 last:border-b-0 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_auto] xl:items-center"
+                    className="grid gap-4 border-b border-[#eadfD1] p-5 last:border-b-0 md:grid-cols-[88px_minmax(0,0.9fr)_minmax(0,1.1fr)] xl:grid-cols-[88px_minmax(0,0.8fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_auto] xl:items-center"
                   >
+                    <div className="h-32 w-[88px] overflow-hidden border border-[#d9cbbb] bg-[#17231f] shadow-sm">
+                      {movie.poster ? (
+                        <img
+                          className="h-full w-full object-cover"
+                          src={movie.poster}
+                          alt={`${movie.titleCn} 海报`}
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div
+                          className="flex h-full w-full flex-col justify-between p-3 text-white"
+                          style={{ background: movie.visualAccent }}
+                        >
+                          <Clapperboard size={18} className="text-[#f0c86a]" />
+                          <span className="font-serif text-sm font-semibold leading-tight">
+                            {movie.titleCn}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                     <div>
                       <p className="text-[11px] font-bold tracking-[0.18em] text-[#9b6d22]">
                         编号 #{movie.id}
@@ -954,6 +1017,34 @@ function App() {
             <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[0.9fr_1.1fr]">
               <div className="space-y-6">
                 <section>
+                  <h3 className="mb-3 font-serif text-xl font-semibold">海报</h3>
+                  <div className="overflow-hidden border border-[#d9cbbb] bg-[#17231f]">
+                    {selectedMovie.poster ? (
+                      <img
+                        className="max-h-[520px] w-full object-cover"
+                        src={selectedMovie.poster}
+                        alt={`${selectedMovie.titleCn} 海报`}
+                      />
+                    ) : (
+                      <div
+                        className="flex aspect-[3/4] w-full flex-col justify-between p-8 text-white"
+                        style={{ background: selectedMovie.visualAccent }}
+                      >
+                        <Clapperboard size={40} className="text-[#f0c86a]" />
+                        <div>
+                          <p className="mb-3 text-xs font-bold tracking-[0.24em] text-[#f0c86a]">
+                            POSTER PENDING
+                          </p>
+                          <p className="font-serif text-4xl font-semibold leading-tight">
+                            {selectedMovie.titleCn}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                <section>
                   <h3 className="mb-3 font-serif text-xl font-semibold">简介</h3>
                   <p className="text-sm leading-7 text-[#4d463c]">
                     {selectedMovie.intro}
@@ -983,6 +1074,25 @@ function App() {
                         {translateTheme(theme)}
                         <span className="ml-1 opacity-60">{theme}</span>
                       </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="mb-3 font-serif text-xl font-semibold">剧情画面线索</h3>
+                  <div className="grid gap-3">
+                    {selectedMovie.sceneClues.map((item, index) => (
+                      <div
+                        key={item.title}
+                        className="border border-[#d9cbbb] bg-white p-4"
+                      >
+                        <p className="text-xs font-bold tracking-[0.18em] text-[#9b6d22]">
+                          0{index + 1} · {item.title}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-[#4d463c]">
+                          {item.text}
+                        </p>
+                      </div>
                     ))}
                   </div>
                 </section>
