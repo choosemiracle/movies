@@ -21,6 +21,7 @@ import {
 import { movieCatalog } from './movieCatalog';
 import { doubanMovieInfo } from './doubanMovieInfo';
 import { movieInfo } from './movieInfo';
+import { movieVisuals } from './movieVisuals';
 
 const themeTranslations = {
   Abandonment: '被遗弃感',
@@ -136,6 +137,7 @@ const translateTheme = (theme) => themeTranslations[theme] || theme;
 
 const doubanInfoById = new Map(doubanMovieInfo.map((movie) => [movie.id, movie]));
 const movieInfoById = new Map(movieInfo.map((movie) => [movie.id, movie]));
+const movieVisualsById = new Map(movieVisuals.map((movie) => [movie.id, movie]));
 
 const normalizeMovieTitle = (title) =>
   title.replace(/^(.+),\s*(The|A|An)$/i, '$2 $1');
@@ -272,6 +274,9 @@ const getMoviePoster = (movie) => {
   const doubanInfo = doubanInfoById.get(movie.id);
   if (doubanInfo?.doubanCover) return doubanInfo.doubanCover;
 
+  const visualInfo = movieVisualsById.get(movie.id);
+  if (visualInfo?.posterUrl) return visualInfo.posterUrl;
+
   const featured = featuredMovies.find(
     (item) => item.title === getChineseTitle(movie) || item.title === normalizeMovieTitle(movie.title),
   );
@@ -318,6 +323,7 @@ const enrichMovie = (movie) => ({
   focus: getMovieFocus(movie),
   practices: getPracticeSteps(movie),
   poster: getMoviePoster(movie),
+  sceneImages: movieVisualsById.get(movie.id)?.sceneImages || [],
   visualAccent: getVisualAccent(movie),
   sceneClues: getSceneClues(movie),
   hasVerifiedChineseTitle: Boolean(
@@ -1043,6 +1049,27 @@ function App() {
                     )}
                   </div>
                 </section>
+
+                {selectedMovie.sceneImages.length > 0 && (
+                  <section>
+                    <h3 className="mb-3 font-serif text-xl font-semibold">剧情画面</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {selectedMovie.sceneImages.map((image) => (
+                        <div
+                          key={image}
+                          className="aspect-[4/3] overflow-hidden border border-[#d9cbbb] bg-[#17231f]"
+                        >
+                          <img
+                            className="h-full w-full object-cover"
+                            src={image}
+                            alt={`${selectedMovie.titleCn} 剧情画面`}
+                            loading="lazy"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
 
                 <section>
                   <h3 className="mb-3 font-serif text-xl font-semibold">简介</h3>
