@@ -1140,19 +1140,6 @@ export const movieCatalog = [
     ]
   },
   {
-    "id": "3598",
-    "title": "Dalai Lama Awakening",
-    "themes": [
-      "Discover True Identity",
-      "Intellectualization",
-      "Letting Go of Control",
-      "Mind Training",
-      "Pride",
-      "Transcending Roles",
-      "Unhealed Healer"
-    ]
-  },
-  {
     "id": "3180",
     "title": "Dan in Real Life",
     "themes": [

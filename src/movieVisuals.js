@@ -3193,12 +3193,6 @@ export const movieVisuals = [
     ]
   },
   {
-    "id": "3598",
-    "sourceUrl": "https://mwge.org/movies/dalai-lama-awakening/",
-    "posterUrl": "movie-images/posters/3598-poster.jpg",
-    "sceneImages": []
-  },
-  {
     "id": "3599",
     "sourceUrl": "https://mwge.org/movies/love-mercy/",
     "posterUrl": "movie-images/posters/3599-poster.jpg",
