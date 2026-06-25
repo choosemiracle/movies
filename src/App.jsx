@@ -1347,15 +1347,15 @@ function App() {
                 THE SPOTLIGHT
               </p>
               <h2 className="font-serif text-4xl font-semibold leading-tight">
-                周六全天观影工作坊
+                周六全天观影工作坊（即将推出）
               </h2>
               <p className="mt-5 text-base leading-8 text-[#5f5548]">
-                和同路人一起线上观看一部电影，穿插静默、引导提问与小组分享。适合想把灵性学习落回日常关系、工作与情绪的人。
+                和同路人一起线上观看电影片段，穿插静默、自由书写、双心冥想、小组分享等练习。适合想把内在成长落回日常关系、工作与生活的伙伴们。
               </p>
               <div className="mt-8 grid gap-4 sm:grid-cols-3">
                 {[
                   ['形式', '线上共修'],
-                  ['节奏', '观影 + 分享'],
+                  ['节奏', '观影+信任圈'],
                   ['适合', '深度练习者'],
                 ].map(([label, value]) => (
                   <div key={label} className="border-t border-[#d9cbbb] pt-4">
