@@ -491,10 +491,11 @@ const DEFAULT_ADMIN = {
   password: 'weijia77',
 };
 
-const createCustomer = ({ name, email }) => ({
+const createCustomer = ({ name, email, password }) => ({
   id: `customer-${Date.now()}-${Math.random().toString(16).slice(2)}`,
   name: name.trim(),
   email: email.trim().toLowerCase(),
+  password,
   createdAt: new Date().toISOString(),
   status: 'active',
 });
@@ -544,12 +545,16 @@ function App() {
   const [accountNotice, setAccountNotice] = useState('');
   const [customers, setCustomers] = useState(readStoredCustomers);
   const [currentCustomerId, setCurrentCustomerId] = useState(readStoredCurrentCustomerId);
-  const [customerForm, setCustomerForm] = useState({ name: '', email: '' });
-  const [customerEditForm, setCustomerEditForm] = useState({ id: '', name: '', email: '' });
+  const [loginForm, setLoginForm] = useState({ account: '', password: '' });
+  const [customerEditForm, setCustomerEditForm] = useState({ id: '', name: '', email: '', password: '' });
   const [adminCredentials, setAdminCredentials] = useState(readStoredAdmin);
   const [isAdmin, setIsAdmin] = useState(readStoredAdminSession);
-  const [adminLoginForm, setAdminLoginForm] = useState({ username: 'admin', password: '' });
   const [adminPasswordForm, setAdminPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [customerPasswordForm, setCustomerPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
@@ -628,42 +633,52 @@ function App() {
     setAccountPanelOpen(true);
   };
 
-  const handleCustomerSubmit = (event) => {
+  const handleLoginSubmit = (event) => {
     event.preventDefault();
-    const email = customerForm.email.trim().toLowerCase();
+    const account = loginForm.account.trim();
+    const password = loginForm.password;
 
-    if (!email) {
-      setAccountNotice('请填写邮箱。');
+    if (!account || !password) {
+      setAccountNotice('请填写账号和密码。');
       return;
     }
 
-    const existingCustomer = customers.find((customer) => customer.email === email);
+    if (account === adminCredentials.username) {
+      if (password !== adminCredentials.password) {
+        setAccountNotice('账号或密码不正确。');
+        return;
+      }
+
+      persistAdminSession(true);
+      persistCurrentCustomerId('');
+      setLoginForm({ account: '', password: '' });
+      setAccountNotice('');
+      setAccountMode('manage');
+      return;
+    }
+
+    const existingCustomer = customers.find((customer) => customer.email === account.toLowerCase());
 
     if (!existingCustomer || existingCustomer.status !== 'active') {
       setAccountNotice('没有找到可用客户账号，请联系管理员添加或启用。');
       return;
     }
 
-    persistCurrentCustomerId(existingCustomer.id);
-    persistAdminSession(false);
-    setAccountNotice('');
-    setAccountPanelOpen(false);
-  };
-
-  const handleAdminLogin = (event) => {
-    event.preventDefault();
-    const username = adminLoginForm.username.trim();
-
-    if (username !== adminCredentials.username || adminLoginForm.password !== adminCredentials.password) {
-      setAccountNotice('管理员账号或密码不正确。');
+    if (!existingCustomer.password) {
+      setAccountNotice('这个客户账号还没有设置密码，请联系管理员补设。');
       return;
     }
 
-    persistAdminSession(true);
-    persistCurrentCustomerId('');
-    setAdminLoginForm({ username: adminCredentials.username, password: '' });
+    if (existingCustomer.password !== password) {
+      setAccountNotice('账号或密码不正确。');
+      return;
+    }
+
+    persistCurrentCustomerId(existingCustomer.id);
+    persistAdminSession(false);
+    setLoginForm({ account: '', password: '' });
     setAccountNotice('');
-    setAccountMode('manage');
+    setAccountPanelOpen(false);
   };
 
   const handleSaveCustomer = (event) => {
@@ -671,15 +686,26 @@ function App() {
 
     if (!isAdmin) {
       setAccountNotice('只有管理员可以维护客户账号。');
-      setAccountMode('adminLogin');
+      setAccountMode('login');
       return;
     }
 
     const name = customerEditForm.name.trim();
     const email = customerEditForm.email.trim().toLowerCase();
+    const password = customerEditForm.password.trim();
 
     if (!name || !email) {
       setAccountNotice('请填写客户姓名和邮箱。');
+      return;
+    }
+
+    if (!customerEditForm.id && password.length < 6) {
+      setAccountNotice('客户初始密码至少需要 6 位。');
+      return;
+    }
+
+    if (customerEditForm.id && password && password.length < 6) {
+      setAccountNotice('客户新密码至少需要 6 位。');
       return;
     }
 
@@ -690,11 +716,19 @@ function App() {
     }
 
     if (customerEditForm.id) {
+      const customerBeingEdited = customers.find((customer) => customer.id === customerEditForm.id);
+      if (!password && !customerBeingEdited?.password) {
+        setAccountNotice('这个客户还没有密码，请为客户设置初始密码。');
+        return;
+      }
+
       const nextCustomers = customers.map((customer) =>
-        customer.id === customerEditForm.id ? { ...customer, name, email } : customer,
+        customer.id === customerEditForm.id
+          ? { ...customer, name, email, ...(password ? { password } : {}) }
+          : customer,
       );
       persistCustomers(nextCustomers);
-      setCustomerEditForm({ id: '', name: '', email: '' });
+      setCustomerEditForm({ id: '', name: '', email: '', password: '' });
       setAccountNotice('客户资料已更新。');
       return;
     }
@@ -702,19 +736,53 @@ function App() {
     if (existingCustomer) {
       const nextCustomers = customers.map((customer) =>
         customer.id === existingCustomer.id
-          ? { ...customer, name, email, status: 'active' }
+          ? { ...customer, name, email, password, status: 'active' }
           : customer,
       );
       persistCustomers(nextCustomers);
-      setCustomerEditForm({ id: '', name: '', email: '' });
+      setCustomerEditForm({ id: '', name: '', email: '', password: '' });
       setAccountNotice('客户账号已重新启用。');
       return;
     }
 
-    const nextCustomer = createCustomer({ name, email });
+    const nextCustomer = createCustomer({ name, email, password });
     persistCustomers([...customers, nextCustomer]);
-    setCustomerEditForm({ id: '', name: '', email: '' });
+    setCustomerEditForm({ id: '', name: '', email: '', password: '' });
     setAccountNotice('客户账号已添加。');
+  };
+
+  const handleCustomerPasswordChange = (event) => {
+    event.preventDefault();
+
+    if (!currentCustomer) {
+      setAccountNotice('请先登录客户账号。');
+      return;
+    }
+
+    if (customerPasswordForm.currentPassword !== currentCustomer.password) {
+      setAccountNotice('当前客户密码不正确。');
+      return;
+    }
+
+    if (!customerPasswordForm.newPassword || customerPasswordForm.newPassword.length < 6) {
+      setAccountNotice('新密码至少需要 6 位。');
+      return;
+    }
+
+    if (customerPasswordForm.newPassword !== customerPasswordForm.confirmPassword) {
+      setAccountNotice('两次输入的新密码不一致。');
+      return;
+    }
+
+    persistCustomers(
+      customers.map((customer) =>
+        customer.id === currentCustomer.id
+          ? { ...customer, password: customerPasswordForm.newPassword }
+          : customer,
+      ),
+    );
+    setCustomerPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    setAccountNotice('客户密码已更新。');
   };
 
   const handleAdminPasswordChange = (event) => {
@@ -833,7 +901,7 @@ function App() {
               <>
                 <button
                   className="inline-flex items-center gap-2 border border-white/20 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/10"
-                  onClick={() => openAccountPanel('manage')}
+                  onClick={() => openAccountPanel('profile')}
                 >
                   <Users size={16} /> {currentCustomer.name}
                 </button>
@@ -849,7 +917,7 @@ function App() {
                 className="inline-flex items-center gap-2 bg-[#d6a647] px-4 py-2 text-sm font-bold text-[#17231f] hover:bg-[#efc35d]"
                 onClick={() => openAccountPanel('login')}
               >
-                <LogIn size={16} /> 客户登录
+                <LogIn size={16} /> 登录
               </button>
             )}
           </div>
@@ -878,11 +946,11 @@ function App() {
               className="mt-2 flex w-full items-center justify-center gap-2 bg-[#d6a647] px-4 py-3 text-sm font-bold text-[#17231f]"
               onClick={() => {
                 setMobileOpen(false);
-                openAccountPanel(isAdmin ? 'manage' : 'login');
+                openAccountPanel(isAdmin ? 'manage' : currentCustomer ? 'profile' : 'login');
               }}
             >
               {isAdmin || currentCustomer ? <Users size={16} /> : <LogIn size={16} />}
-              {isAdmin ? '管理员' : currentCustomer ? currentCustomer.name : '客户登录'}
+              {isAdmin ? '管理员' : currentCustomer ? currentCustomer.name : '登录'}
             </button>
           </div>
         )}
@@ -1327,10 +1395,11 @@ function App() {
               <div className="mb-6 flex flex-wrap gap-2">
                 {[
                   ['login', '登录'],
-                  ['adminLogin', '管理员登录'],
                   ['manage', '客户维护'],
+                  ['profile', '我的账号'],
                 ]
                   .filter(([mode]) => mode !== 'manage' || isAdmin)
+                  .filter(([mode]) => mode !== 'profile' || currentCustomer)
                   .map(([mode, label]) => (
                   <button
                     key={mode}
@@ -1356,84 +1425,93 @@ function App() {
               )}
 
               {accountMode === 'login' && (
-                <form className="grid gap-4" onSubmit={handleCustomerSubmit}>
+                <form className="grid gap-4" onSubmit={handleLoginSubmit}>
                   <label className="grid gap-2 text-sm font-semibold text-[#4d463c]">
-                    客户邮箱
+                    账号
                     <input
                       className="border border-[#d9cbbb] bg-white px-4 py-3 text-sm font-normal outline-none focus:border-[#9b6d22]"
-                      type="email"
-                      value={customerForm.email}
+                      value={loginForm.account}
                       onChange={(event) =>
-                        setCustomerForm((form) => ({ ...form, email: event.target.value }))
+                        setLoginForm((form) => ({ ...form, account: event.target.value }))
                       }
-                      placeholder="name@example.com"
-                    />
-                  </label>
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <button
-                      className="inline-flex items-center justify-center gap-2 bg-[#17231f] px-5 py-3 text-sm font-bold text-white hover:bg-[#263a34]"
-                      type="submit"
-                    >
-                      <LogIn size={16} /> 登录并查看详情
-                    </button>
-                    <button
-                      className="border border-[#17231f] px-5 py-3 text-sm font-bold text-[#17231f] hover:bg-[#17231f] hover:text-white"
-                      type="button"
-                      onClick={() => {
-                        setAccountMode('adminLogin');
-                        setAccountNotice('');
-                      }}
-                    >
-                      管理员登录
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {accountMode === 'adminLogin' && (
-                <form className="grid gap-4" onSubmit={handleAdminLogin}>
-                  <label className="grid gap-2 text-sm font-semibold text-[#4d463c]">
-                    管理员账号
-                    <input
-                      className="border border-[#d9cbbb] bg-white px-4 py-3 text-sm font-normal outline-none focus:border-[#9b6d22]"
-                      value={adminLoginForm.username}
-                      onChange={(event) =>
-                        setAdminLoginForm((form) => ({ ...form, username: event.target.value }))
-                      }
-                      placeholder="admin"
+                      placeholder="管理员账号或客户邮箱"
                     />
                   </label>
                   <label className="grid gap-2 text-sm font-semibold text-[#4d463c]">
-                    管理员密码
+                    密码
                     <input
                       className="border border-[#d9cbbb] bg-white px-4 py-3 text-sm font-normal outline-none focus:border-[#9b6d22]"
                       type="password"
-                      value={adminLoginForm.password}
+                      value={loginForm.password}
                       onChange={(event) =>
-                        setAdminLoginForm((form) => ({ ...form, password: event.target.value }))
+                        setLoginForm((form) => ({ ...form, password: event.target.value }))
                       }
-                      placeholder="输入管理员密码"
+                      placeholder="输入密码"
                     />
                   </label>
-                  <div className="flex flex-col gap-3 sm:flex-row">
+                  <button
+                    className="inline-flex w-fit items-center justify-center gap-2 bg-[#17231f] px-5 py-3 text-sm font-bold text-white hover:bg-[#263a34]"
+                    type="submit"
+                  >
+                    <LogIn size={16} /> 登录
+                  </button>
+                </form>
+              )}
+
+              {accountMode === 'profile' && currentCustomer && (
+                <div>
+                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-serif text-2xl font-semibold">{currentCustomer.name}</p>
+                      <p className="mt-1 text-sm text-[#665d52]">{currentCustomer.email}</p>
+                    </div>
                     <button
-                      className="inline-flex items-center justify-center gap-2 bg-[#17231f] px-5 py-3 text-sm font-bold text-white hover:bg-[#263a34]"
-                      type="submit"
+                      className="inline-flex items-center justify-center gap-2 border border-[#17231f] px-4 py-2 text-sm font-bold text-[#17231f] hover:bg-[#17231f] hover:text-white"
+                      onClick={handleLogout}
                     >
-                      <LogIn size={16} /> 进入客户管理
-                    </button>
-                    <button
-                      className="border border-[#17231f] px-5 py-3 text-sm font-bold text-[#17231f] hover:bg-[#17231f] hover:text-white"
-                      type="button"
-                      onClick={() => {
-                        setAccountMode('login');
-                        setAccountNotice('');
-                      }}
-                    >
-                      返回客户登录
+                      <LogOut size={16} /> 退出
                     </button>
                   </div>
-                </form>
+
+                  <form className="grid gap-4 border border-[#d9cbbb] bg-white p-4" onSubmit={handleCustomerPasswordChange}>
+                    <p className="font-serif text-xl font-semibold">修改密码</p>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <input
+                        className="border border-[#d9cbbb] bg-[#fffaf2] px-4 py-3 text-sm outline-none focus:border-[#9b6d22]"
+                        type="password"
+                        value={customerPasswordForm.currentPassword}
+                        onChange={(event) =>
+                          setCustomerPasswordForm((form) => ({ ...form, currentPassword: event.target.value }))
+                        }
+                        placeholder="当前密码"
+                      />
+                      <input
+                        className="border border-[#d9cbbb] bg-[#fffaf2] px-4 py-3 text-sm outline-none focus:border-[#9b6d22]"
+                        type="password"
+                        value={customerPasswordForm.newPassword}
+                        onChange={(event) =>
+                          setCustomerPasswordForm((form) => ({ ...form, newPassword: event.target.value }))
+                        }
+                        placeholder="新密码"
+                      />
+                      <input
+                        className="border border-[#d9cbbb] bg-[#fffaf2] px-4 py-3 text-sm outline-none focus:border-[#9b6d22]"
+                        type="password"
+                        value={customerPasswordForm.confirmPassword}
+                        onChange={(event) =>
+                          setCustomerPasswordForm((form) => ({ ...form, confirmPassword: event.target.value }))
+                        }
+                        placeholder="确认新密码"
+                      />
+                    </div>
+                    <button
+                      className="w-fit bg-[#17231f] px-5 py-3 text-sm font-bold text-white hover:bg-[#263a34]"
+                      type="submit"
+                    >
+                      更新密码
+                    </button>
+                  </form>
+                </div>
               )}
 
               {accountMode === 'manage' && (
@@ -1462,7 +1540,7 @@ function App() {
                     <p className="font-serif text-xl font-semibold">
                       {customerEditForm.id ? '修改客户' : '添加客户'}
                     </p>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-4 sm:grid-cols-3">
                       <label className="grid gap-2 text-sm font-semibold text-[#4d463c]">
                         客户姓名
                         <input
@@ -1486,6 +1564,18 @@ function App() {
                           placeholder="name@example.com"
                         />
                       </label>
+                      <label className="grid gap-2 text-sm font-semibold text-[#4d463c]">
+                        {customerEditForm.id ? '重设密码' : '初始密码'}
+                        <input
+                          className="border border-[#d9cbbb] bg-[#fffaf2] px-4 py-3 text-sm font-normal outline-none focus:border-[#9b6d22]"
+                          type="password"
+                          value={customerEditForm.password}
+                          onChange={(event) =>
+                            setCustomerEditForm((form) => ({ ...form, password: event.target.value }))
+                          }
+                          placeholder={customerEditForm.id ? '留空则不修改' : '至少 6 位'}
+                        />
+                      </label>
                     </div>
                     <div className="flex flex-wrap gap-3">
                       <button
@@ -1499,7 +1589,7 @@ function App() {
                           className="border border-[#17231f] px-5 py-3 text-sm font-bold text-[#17231f] hover:bg-[#17231f] hover:text-white"
                           type="button"
                           onClick={() => {
-                            setCustomerEditForm({ id: '', name: '', email: '' });
+                            setCustomerEditForm({ id: '', name: '', email: '', password: '' });
                             setAccountNotice('');
                           }}
                         >
@@ -1515,7 +1605,7 @@ function App() {
                         <p className="font-serif text-2xl">还没有客户账号</p>
                         <button
                           className="mt-4 bg-[#17231f] px-5 py-3 text-sm font-bold text-white"
-                          onClick={() => setCustomerEditForm({ id: '', name: '', email: '' })}
+                          onClick={() => setCustomerEditForm({ id: '', name: '', email: '', password: '' })}
                         >
                           在上方添加客户
                         </button>
@@ -1540,6 +1630,7 @@ function App() {
                                   id: customer.id,
                                   name: customer.name,
                                   email: customer.email,
+                                  password: '',
                                 });
                                 setAccountNotice('');
                               }}
