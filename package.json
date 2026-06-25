@@ -1,15 +1,15 @@
 {
-  "name": "let-your-life-speak",
+  "name": "movies",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://choosemiracle.github.io/let-your-life-speak/",
+  "homepage": "https://choosemiracle.github.io/movies/",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist -r https://github.com/choosemiracle/movies.git"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.4",
@@ -34,5 +34,4 @@
     "vite": "^8.0.10"
   }
 }
-
 

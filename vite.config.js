@@ -9,5 +9,5 @@ export default defineConfig({
     react(),
     tailwindcss(), // 将 tailwind 添加到这里
   ],
-  base: '/let-your-life-speak/',
+  base: '/movies/',
 })
