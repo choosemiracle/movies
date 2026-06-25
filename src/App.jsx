@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import {
   ArrowRight,
   BookOpen,
-  CalendarDays,
   Check,
   ChevronDown,
   CircleUserRound,
@@ -490,6 +489,8 @@ const spotlights = [
 ];
 
 const PAGE_SIZE = 24;
+const CONTACT_URL =
+  'https://zcnv8lc63v15.feishu.cn/docx/ENSjdAKhOoDiIUxOQJycdzD8nSe?from=from_copylink';
 const CUSTOMERS_STORAGE_KEY = 'miracle-movies-customers';
 const CURRENT_CUSTOMER_STORAGE_KEY = 'miracle-movies-current-customer';
 const ADMIN_STORAGE_KEY = 'miracle-movies-admin';
@@ -902,7 +903,7 @@ function App() {
               焦点
             </a>
             <a className="hover:text-white" href="#join">
-              加入
+              联系人
             </a>
           </div>
 
@@ -957,7 +958,7 @@ function App() {
         </nav>
         {mobileOpen && (
           <div className="border-t border-white/10 bg-[#17231f] px-5 py-4 md:hidden">
-            {['电影库', '深入练习', '焦点', '加入'].map((item, index) => (
+            {['电影库', '深入练习', '焦点', '联系人'].map((item, index) => (
               <a
                 key={item}
                 className="block py-3 text-sm text-white/80"
@@ -1367,10 +1368,12 @@ function App() {
               </div>
               <a
                 id="join"
-                href="mailto:hello@example.com?subject=报名观影工作坊"
+                href={CONTACT_URL}
+                target="_blank"
+                rel="noreferrer"
                 className="mt-9 inline-flex w-fit items-center gap-3 bg-[#17231f] px-6 py-4 text-sm font-bold text-white hover:bg-[#263a34]"
               >
-                预约下一场 <CalendarDays size={18} />
+                联系韦伟 <MessageCircle size={18} />
               </a>
             </div>
           </div>
@@ -1384,6 +1387,14 @@ function App() {
             <span>奇迹工坊 · 光影内观：以电影为镜，回到当下的心。</span>
           </div>
           <div className="flex flex-wrap gap-4">
+            <a
+              className="inline-flex items-center gap-2 hover:text-[#9b6d22]"
+              href={CONTACT_URL}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle size={16} /> 联系人：韦伟，奇迹工坊主理人
+            </a>
             <span className="inline-flex items-center gap-2">
               <BookOpen size={16} /> 观影笔记
             </span>
