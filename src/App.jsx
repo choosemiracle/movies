@@ -1373,7 +1373,7 @@ function App() {
                 rel="noreferrer"
                 className="mt-9 inline-flex w-fit items-center gap-3 bg-[#17231f] px-6 py-4 text-sm font-bold text-white hover:bg-[#263a34]"
               >
-                联系韦伟 <MessageCircle size={18} />
+                报名联系 <MessageCircle size={18} />
               </a>
             </div>
           </div>
@@ -1393,7 +1393,7 @@ function App() {
               target="_blank"
               rel="noreferrer"
             >
-              <MessageCircle size={16} /> 联系人：韦伟，奇迹工坊主理人
+              <MessageCircle size={16} /> 联系人
             </a>
             <span className="inline-flex items-center gap-2">
               <BookOpen size={16} /> 观影笔记
