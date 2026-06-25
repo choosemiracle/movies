@@ -386,17 +386,19 @@ const buildThemeGroups = (movies) => {
 
 const featuredMovies = [
   {
-    title: '心灵奇旅',
-    year: '2020',
-    type: '动画 / 音乐',
+    movieId: '3220',
+    title: '天堂过客',
+    year: '1993',
+    type: '喜剧 / 奇幻',
     level: '入门',
-    themes: ['临在', '真实身份', '执着', '喜悦'],
+    themes: ['死亡', '奉献', '宽恕', '幸福'],
     image: 'movie-images/thumbs/3220-poster.jpg',
     guide:
-      '当“人生目标”变成新的枷锁，灵魂会错过当下正在发生的简单喜悦。',
-    question: '如果不需要证明这一生有用，我今天会怎样更真实地活着？',
+      '未完成的心愿会把人留在过去，宽恕则让关系重新流动。',
+    question: '我还把哪段过去当作无法放下的理由？',
   },
   {
+    movieId: '3340',
     title: '楚门的世界',
     year: '1998',
     type: '剧情 / 寓言',
@@ -408,6 +410,7 @@ const featuredMovies = [
     question: '我最害怕走出哪个“被安排好的安全区”？',
   },
   {
+    movieId: '3582',
     title: '降临',
     year: '2016',
     type: '科幻 / 关系',
@@ -419,17 +422,19 @@ const featuredMovies = [
     question: '若我已经知道会失去，我还愿意全然去爱吗？',
   },
   {
-    title: '海街日记',
-    year: '2015',
-    type: '家庭 / 日常',
+    movieId: '3213',
+    title: '绿卡',
+    year: '1990',
+    type: '爱情 / 喜剧',
     level: '入门',
-    themes: ['家庭', '宽恕', '疗愈', '羞耻'],
+    themes: ['欺骗', '放下控制', '婚姻', '向爱敞开'],
     image: 'movie-images/thumbs/3213-poster.jpg',
     guide:
-      '疗愈常常不是激烈的和解，而是在一餐一饭里重新允许彼此存在。',
-    question: '我是否仍在替上一代没有说出口的痛苦背负责任？',
+      '假装亲密会暴露真实防御，关系也可能在失控中打开。',
+    question: '我在哪段关系里用控制替代了诚实？',
   },
   {
+    movieId: '3160',
     title: '美丽心灵',
     year: '2001',
     type: '传记 / 剧情',
@@ -441,17 +446,19 @@ const featuredMovies = [
     question: '我正在把哪个内在恐惧投射到他人身上？',
   },
   {
-    title: '少年派的奇幻漂流',
-    year: '2012',
-    type: '冒险 / 灵性',
+    movieId: '3529',
+    title: '天上掉下个天使',
+    year: '2011',
+    type: '剧情 / 爱情',
     level: '深潜',
-    themes: ['信任', '分离感', '奇迹', '恐惧'],
+    themes: ['死亡', '家庭', '疗愈', '向爱敞开'],
     image: 'movie-images/thumbs/3529-poster.jpg',
     guide:
-      '信仰不是解释苦难，而是在未知中选择不关闭心。',
-    question: '我讲述自己的故事时，选择了恐惧版本还是恩典版本？',
+      '当生命被迫慢下来，真正重要的关系与心愿会浮出水面。',
+    question: '如果时间不再被我掌控，我会先修复哪一段关系？',
   },
   {
+    movieId: '3481',
     title: '她',
     year: '2013',
     type: '爱情 / 科幻',
@@ -463,15 +470,16 @@ const featuredMovies = [
     question: '我爱的是眼前这个人，还是他满足我想象中的空缺？',
   },
   {
-    title: '千与千寻',
-    year: '2001',
-    type: '动画 / 成长',
+    movieId: '3418',
+    title: '今日特惠',
+    year: '2009',
+    type: '剧情 / 喜剧',
     level: '入门',
-    themes: ['勇气', '真实身份', '执着', '家庭'],
+    themes: ['家庭', '灵感', '放下特殊性', '目的'],
     image: 'movie-images/thumbs/3418-poster.jpg',
     guide:
-      '名字象征记忆与身份。被世界催眠时，记得自己是谁。',
-    question: '我为了适应环境，遗忘了自己的哪一个名字？',
+      '真正的创造力常在放下特殊性之后，回到眼前的人与事。',
+    question: '我是否因为追求更特别，忽略了当下正在邀请我的任务？',
   },
 ];
 
@@ -567,9 +575,7 @@ function App() {
     () =>
       featuredMovies.map((featuredMovie) => ({
         ...featuredMovie,
-        details:
-          enrichedMovies.find((movie) => movie.titleCn === featuredMovie.title) ||
-          enrichedMovies.find((movie) => normalizeMovieTitle(movie.title) === featuredMovie.title),
+        details: enrichedMovies.find((movie) => movie.id === featuredMovie.movieId),
       })),
     [enrichedMovies],
   );
