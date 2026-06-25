@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ArrowRight,
   BookOpen,
@@ -10,12 +10,16 @@ import {
   Compass,
   Filter,
   Heart,
+  LogIn,
+  LogOut,
   Menu,
   MessageCircle,
   Play,
   Search,
   Sparkles,
   Star,
+  UserPlus,
+  Users,
   X,
 } from 'lucide-react';
 import { movieCatalog } from './movieCatalog';
@@ -478,6 +482,33 @@ const spotlights = [
 ];
 
 const PAGE_SIZE = 24;
+const CUSTOMERS_STORAGE_KEY = 'miracle-movies-customers';
+const CURRENT_CUSTOMER_STORAGE_KEY = 'miracle-movies-current-customer';
+
+const createCustomer = ({ name, email }) => ({
+  id: `customer-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  name: name.trim(),
+  email: email.trim().toLowerCase(),
+  createdAt: new Date().toISOString(),
+  status: 'active',
+});
+
+const readStoredCustomers = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CUSTOMERS_STORAGE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const readStoredCurrentCustomerId = () => {
+  try {
+    return localStorage.getItem(CURRENT_CUSTOMER_STORAGE_KEY) || '';
+  } catch {
+    return '';
+  }
+};
 
 function App() {
   const [activeTheme, setActiveTheme] = useState('全部');
@@ -485,6 +516,12 @@ function App() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedMovie, setSelectedMovie] = useState(null);
+  const [accountPanelOpen, setAccountPanelOpen] = useState(false);
+  const [accountMode, setAccountMode] = useState('login');
+  const [accountNotice, setAccountNotice] = useState('');
+  const [customers, setCustomers] = useState(readStoredCustomers);
+  const [currentCustomerId, setCurrentCustomerId] = useState(readStoredCurrentCustomerId);
+  const [customerForm, setCustomerForm] = useState({ name: '', email: '' });
 
   const themeGroups = useMemo(() => buildThemeGroups(movieCatalog), []);
   const enrichedMovies = useMemo(() => movieCatalog.map(enrichMovie), []);
@@ -511,23 +548,128 @@ function App() {
   }, [activeTheme, enrichedMovies, query]);
 
   const totalPages = Math.max(1, Math.ceil(filteredMovies.length / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
   const pagedMovies = filteredMovies.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE,
+    (safeCurrentPage - 1) * PAGE_SIZE,
+    safeCurrentPage * PAGE_SIZE,
   );
 
   const selectedThemeLabel =
     activeTheme === '全部' ? '全部' : `${translateTheme(activeTheme)} / ${activeTheme}`;
+  const currentCustomer =
+    customers.find((customer) => customer.id === currentCustomerId && customer.status === 'active') ||
+    null;
+  const activeCustomers = customers.filter((customer) => customer.status === 'active');
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [activeTheme, query]);
+  const persistCustomers = (nextCustomers) => {
+    setCustomers(nextCustomers);
+    localStorage.setItem(CUSTOMERS_STORAGE_KEY, JSON.stringify(nextCustomers));
+  };
 
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
+  const persistCurrentCustomerId = (customerId) => {
+    setCurrentCustomerId(customerId);
+    if (customerId) {
+      localStorage.setItem(CURRENT_CUSTOMER_STORAGE_KEY, customerId);
+    } else {
+      localStorage.removeItem(CURRENT_CUSTOMER_STORAGE_KEY);
     }
-  }, [currentPage, totalPages]);
+  };
+
+  const openAccountPanel = (mode = 'login', notice = '') => {
+    setAccountMode(mode);
+    setAccountNotice(notice);
+    setAccountPanelOpen(true);
+  };
+
+  const handleCustomerSubmit = (event) => {
+    event.preventDefault();
+    const email = customerForm.email.trim().toLowerCase();
+    const name = customerForm.name.trim();
+
+    if (!email) {
+      setAccountNotice('请填写邮箱。');
+      return;
+    }
+
+    const existingCustomer = customers.find((customer) => customer.email === email);
+
+    if (accountMode === 'login') {
+      if (!existingCustomer || existingCustomer.status !== 'active') {
+        setAccountNotice('没有找到这个客户账号，请先注册。');
+        setAccountMode('register');
+        return;
+      }
+      persistCurrentCustomerId(existingCustomer.id);
+      setAccountNotice('');
+      setAccountPanelOpen(false);
+      return;
+    }
+
+    if (!name) {
+      setAccountNotice('请填写客户姓名。');
+      return;
+    }
+
+    if (existingCustomer) {
+      if (existingCustomer.status === 'active') {
+        persistCurrentCustomerId(existingCustomer.id);
+        setAccountNotice('');
+        setAccountPanelOpen(false);
+        return;
+      }
+
+      const nextCustomers = customers.map((customer) =>
+        customer.id === existingCustomer.id
+          ? { ...customer, name, status: 'active' }
+          : customer,
+      );
+      persistCustomers(nextCustomers);
+      persistCurrentCustomerId(existingCustomer.id);
+      setAccountPanelOpen(false);
+      return;
+    }
+
+    const nextCustomer = createCustomer({ name, email });
+    persistCustomers([...customers, nextCustomer]);
+    persistCurrentCustomerId(nextCustomer.id);
+    setCustomerForm({ name: '', email: '' });
+    setAccountNotice('');
+    setAccountPanelOpen(false);
+  };
+
+  const handleLogout = () => {
+    persistCurrentCustomerId('');
+    setSelectedMovie(null);
+  };
+
+  const handleDeactivateCustomer = (customerId) => {
+    const nextCustomers = customers.map((customer) =>
+      customer.id === customerId ? { ...customer, status: 'inactive' } : customer,
+    );
+    persistCustomers(nextCustomers);
+    if (customerId === currentCustomerId) {
+      persistCurrentCustomerId('');
+      setSelectedMovie(null);
+    }
+  };
+
+  const handleOpenMovieDetails = (movie) => {
+    if (!currentCustomer) {
+      openAccountPanel('login', '游客可以查询电影库；查看详情需要客户账号。');
+      return;
+    }
+    setSelectedMovie(movie);
+  };
+
+  const selectTheme = (theme) => {
+    setActiveTheme(theme);
+    setCurrentPage(1);
+  };
+
+  const updateQuery = (value) => {
+    setQuery(value);
+    setCurrentPage(1);
+  };
 
   return (
     <div className="min-h-screen bg-[#f5f0e8] text-[#1f2723]">
@@ -562,6 +704,32 @@ function App() {
             </a>
           </div>
 
+          <div className="hidden items-center gap-3 md:flex">
+            {currentCustomer ? (
+              <>
+                <button
+                  className="inline-flex items-center gap-2 border border-white/20 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/10"
+                  onClick={() => openAccountPanel('manage')}
+                >
+                  <Users size={16} /> {currentCustomer.name}
+                </button>
+                <button
+                  className="inline-flex items-center gap-2 bg-white/10 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/16"
+                  onClick={handleLogout}
+                >
+                  <LogOut size={16} /> 退出
+                </button>
+              </>
+            ) : (
+              <button
+                className="inline-flex items-center gap-2 bg-[#d6a647] px-4 py-2 text-sm font-bold text-[#17231f] hover:bg-[#efc35d]"
+                onClick={() => openAccountPanel('login')}
+              >
+                <LogIn size={16} /> 客户登录
+              </button>
+            )}
+          </div>
+
           <button
             className="flex h-10 w-10 items-center justify-center rounded border border-white/20 md:hidden"
             onClick={() => setMobileOpen((value) => !value)}
@@ -582,6 +750,16 @@ function App() {
                 {item}
               </a>
             ))}
+            <button
+              className="mt-2 flex w-full items-center justify-center gap-2 bg-[#d6a647] px-4 py-3 text-sm font-bold text-[#17231f]"
+              onClick={() => {
+                setMobileOpen(false);
+                openAccountPanel(currentCustomer ? 'manage' : 'login');
+              }}
+            >
+              {currentCustomer ? <Users size={16} /> : <LogIn size={16} />}
+              {currentCustomer ? currentCustomer.name : '客户登录'}
+            </button>
           </div>
         )}
       </header>
@@ -657,7 +835,7 @@ function App() {
                       ? 'bg-[#17231f] text-white'
                       : 'bg-[#efe4d6] text-[#1f2723]'
                   }`}
-                  onClick={() => setActiveTheme('全部')}
+                  onClick={() => selectTheme('全部')}
                 >
                   全部影片 <span>{movieCatalog.length}</span>
                 </button>
@@ -672,7 +850,7 @@ function App() {
                         {group.items.map((theme) => (
                           <button
                             key={`${group.title}-${theme.name}`}
-                            onClick={() => setActiveTheme(theme.name)}
+                            onClick={() => selectTheme(theme.name)}
                             className={`px-3 py-2 text-xs transition ${
                               activeTheme === theme.name
                                 ? 'bg-[#d6a647] font-bold text-[#17231f]'
@@ -701,7 +879,7 @@ function App() {
                   <h2 className="font-serif text-4xl font-semibold">电影库</h2>
                   <p className="mt-3 max-w-2xl text-sm leading-6 text-[#665d52]">
                     当前电影库共收录 {movieCatalog.length} 部。当前筛选：
-                    {selectedThemeLabel}，显示 {filteredMovies.length} 部。当前第 {currentPage} / {totalPages} 页。
+                    {selectedThemeLabel}，显示 {filteredMovies.length} 部。当前第 {safeCurrentPage} / {totalPages} 页。
                   </p>
                 </div>
 
@@ -710,7 +888,7 @@ function App() {
                   <input
                     className="min-w-0 flex-1 bg-transparent text-sm outline-none"
                     value={query}
-                    onChange={(event) => setQuery(event.target.value)}
+                    onChange={(event) => updateQuery(event.target.value)}
                     placeholder="搜索电影或主题"
                   />
                 </label>
@@ -786,7 +964,7 @@ function App() {
                       {movie.themes.map((theme) => (
                         <button
                           key={`${movie.id}-${theme}`}
-                          onClick={() => setActiveTheme(theme)}
+                          onClick={() => selectTheme(theme)}
                           className="bg-[#efe4d6] px-2.5 py-1.5 text-xs text-[#5f5548] hover:bg-[#d6a647] hover:text-[#17231f]"
                         >
                           {translateTheme(theme)}
@@ -798,8 +976,12 @@ function App() {
                     </p>
                     <div className="flex flex-wrap gap-2 xl:justify-end">
                       <button
-                        className="inline-flex items-center justify-center gap-2 bg-[#17231f] px-4 py-2 text-xs font-bold text-white hover:bg-[#263a34]"
-                        onClick={() => setSelectedMovie(movie)}
+                        className={`inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold ${
+                          currentCustomer
+                            ? 'bg-[#17231f] text-white hover:bg-[#263a34]'
+                            : 'border border-[#d9cbbb] bg-[#efe4d6] text-[#665d52] hover:border-[#9b6d22]'
+                        }`}
+                        onClick={() => handleOpenMovieDetails(movie)}
                       >
                         查看详情 <ArrowRight size={14} />
                       </button>
@@ -811,13 +993,13 @@ function App() {
               {filteredMovies.length > 0 && (
                 <div className="mt-6 flex flex-col gap-4 border border-[#d9cbbb] bg-[#fffaf2] p-4 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm text-[#665d52]">
-                    第 {(currentPage - 1) * PAGE_SIZE + 1}-
-                    {Math.min(currentPage * PAGE_SIZE, filteredMovies.length)} 部，共 {filteredMovies.length} 部
+                    第 {(safeCurrentPage - 1) * PAGE_SIZE + 1}-
+                    {Math.min(safeCurrentPage * PAGE_SIZE, filteredMovies.length)} 部，共 {filteredMovies.length} 部
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       className="border border-[#17231f] px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-35"
-                      disabled={currentPage === 1}
+                      disabled={safeCurrentPage === 1}
                       onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                     >
                       上一页
@@ -825,7 +1007,7 @@ function App() {
                     {Array.from({ length: totalPages }, (_, index) => index + 1)
                       .filter((page) => {
                         if (totalPages <= 7) return true;
-                        return page === 1 || page === totalPages || Math.abs(page - currentPage) <= 2;
+                        return page === 1 || page === totalPages || Math.abs(page - safeCurrentPage) <= 2;
                       })
                       .map((page, index, pages) => {
                         const previous = pages[index - 1];
@@ -836,7 +1018,7 @@ function App() {
                             )}
                             <button
                               className={`min-w-10 px-3 py-2 text-sm font-bold ${
-                                page === currentPage
+                                page === safeCurrentPage
                                   ? 'bg-[#d6a647] text-[#17231f]'
                                   : 'border border-[#d9cbbb] bg-white text-[#5f5548] hover:bg-[#efe4d6]'
                               }`}
@@ -849,7 +1031,7 @@ function App() {
                       })}
                     <button
                       className="border border-[#17231f] px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-35"
-                      disabled={currentPage === totalPages}
+                      disabled={safeCurrentPage === totalPages}
                       onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
                     >
                       下一页
@@ -864,8 +1046,8 @@ function App() {
                   <button
                     className="mt-5 bg-[#17231f] px-5 py-3 text-sm font-semibold text-white"
                     onClick={() => {
-                      setQuery('');
-                      setActiveTheme('全部');
+                      updateQuery('');
+                      selectTheme('全部');
                     }}
                   >
                     清除筛选
@@ -950,7 +1132,7 @@ function App() {
                 {[
                   ['形式', '线上共修'],
                   ['节奏', '观影 + 分享'],
-                  ['适合', '华语学习者'],
+                  ['适合', '深度练习者'],
                 ].map(([label, value]) => (
                   <div key={label} className="border-t border-[#d9cbbb] pt-4">
                     <p className="text-xs font-bold tracking-[0.18em] text-[#8a7a66]">
@@ -995,7 +1177,174 @@ function App() {
         </div>
       </footer>
 
-      {selectedMovie && (
+      {accountPanelOpen && (
+        <div className="fixed inset-0 z-[90] overflow-y-auto bg-[#101916]/78 px-4 py-6 backdrop-blur-sm sm:py-10">
+          <div className="mx-auto max-w-3xl border border-[#d9cbbb] bg-[#fffaf2] shadow-2xl">
+            <div className="flex items-start justify-between gap-5 border-b border-[#d9cbbb] p-6">
+              <div>
+                <p className="text-xs font-bold tracking-[0.24em] text-[#9b6d22]">
+                  CUSTOMER ACCESS
+                </p>
+                <h2 className="mt-2 font-serif text-3xl font-semibold">客户管理</h2>
+                <p className="mt-2 text-sm leading-6 text-[#665d52]">
+                  游客可以查询和筛选电影库；客户账号可查看完整观影指南。
+                </p>
+              </div>
+              <button
+                className="flex h-10 w-10 shrink-0 items-center justify-center border border-[#17231f] text-[#17231f] hover:bg-[#17231f] hover:text-white"
+                onClick={() => setAccountPanelOpen(false)}
+                aria-label="关闭客户管理"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-6 flex flex-wrap gap-2">
+                {[
+                  ['login', '登录'],
+                  ['register', '注册客户'],
+                  ['manage', '客户列表'],
+                ].map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    className={`px-4 py-2 text-sm font-bold ${
+                      accountMode === mode
+                        ? 'bg-[#17231f] text-white'
+                        : 'border border-[#d9cbbb] bg-white text-[#5f5548] hover:bg-[#efe4d6]'
+                    }`}
+                    onClick={() => {
+                      setAccountMode(mode);
+                      setAccountNotice('');
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {accountNotice && (
+                <div className="mb-5 border-l-4 border-[#d6a647] bg-white px-4 py-3 text-sm font-semibold text-[#5f5548]">
+                  {accountNotice}
+                </div>
+              )}
+
+              {accountMode !== 'manage' && (
+                <form className="grid gap-4" onSubmit={handleCustomerSubmit}>
+                  {accountMode === 'register' && (
+                    <label className="grid gap-2 text-sm font-semibold text-[#4d463c]">
+                      客户姓名
+                      <input
+                        className="border border-[#d9cbbb] bg-white px-4 py-3 text-sm font-normal outline-none focus:border-[#9b6d22]"
+                        value={customerForm.name}
+                        onChange={(event) =>
+                          setCustomerForm((form) => ({ ...form, name: event.target.value }))
+                        }
+                        placeholder="填写姓名或昵称"
+                      />
+                    </label>
+                  )}
+                  <label className="grid gap-2 text-sm font-semibold text-[#4d463c]">
+                    邮箱
+                    <input
+                      className="border border-[#d9cbbb] bg-white px-4 py-3 text-sm font-normal outline-none focus:border-[#9b6d22]"
+                      type="email"
+                      value={customerForm.email}
+                      onChange={(event) =>
+                        setCustomerForm((form) => ({ ...form, email: event.target.value }))
+                      }
+                      placeholder="name@example.com"
+                    />
+                  </label>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <button
+                      className="inline-flex items-center justify-center gap-2 bg-[#17231f] px-5 py-3 text-sm font-bold text-white hover:bg-[#263a34]"
+                      type="submit"
+                    >
+                      {accountMode === 'login' ? <LogIn size={16} /> : <UserPlus size={16} />}
+                      {accountMode === 'login' ? '登录并查看详情' : '创建客户账号'}
+                    </button>
+                    <button
+                      className="border border-[#17231f] px-5 py-3 text-sm font-bold text-[#17231f] hover:bg-[#17231f] hover:text-white"
+                      type="button"
+                      onClick={() => {
+                        setAccountMode(accountMode === 'login' ? 'register' : 'login');
+                        setAccountNotice('');
+                      }}
+                    >
+                      {accountMode === 'login' ? '没有账号，去注册' : '已有账号，去登录'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {accountMode === 'manage' && (
+                <div>
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm leading-6 text-[#665d52]">
+                      当前本机共有 {activeCustomers.length} 个有效客户账号。
+                      {currentCustomer ? ` 已登录：${currentCustomer.name}` : ' 当前为游客模式。'}
+                    </p>
+                    {!currentCustomer && (
+                      <button
+                        className="inline-flex items-center justify-center gap-2 bg-[#17231f] px-4 py-2 text-sm font-bold text-white hover:bg-[#263a34]"
+                        onClick={() => setAccountMode('login')}
+                      >
+                        <LogIn size={16} /> 登录
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="overflow-hidden border border-[#d9cbbb] bg-white">
+                    {activeCustomers.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <p className="font-serif text-2xl">还没有客户账号</p>
+                        <button
+                          className="mt-4 bg-[#17231f] px-5 py-3 text-sm font-bold text-white"
+                          onClick={() => setAccountMode('register')}
+                        >
+                          创建第一个客户
+                        </button>
+                      </div>
+                    ) : (
+                      activeCustomers.map((customer) => (
+                        <div
+                          key={customer.id}
+                          className="flex flex-col gap-3 border-b border-[#eadfd1] p-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div>
+                            <p className="font-serif text-xl font-semibold">{customer.name}</p>
+                            <p className="mt-1 text-sm text-[#665d52]">{customer.email}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              className="border border-[#17231f] px-3 py-2 text-xs font-bold text-[#17231f] hover:bg-[#17231f] hover:text-white"
+                              onClick={() => {
+                                persistCurrentCustomerId(customer.id);
+                                setAccountPanelOpen(false);
+                              }}
+                            >
+                              设为当前客户
+                            </button>
+                            <button
+                              className="border border-[#b2764f] px-3 py-2 text-xs font-bold text-[#7b4429] hover:bg-[#7b4429] hover:text-white"
+                              onClick={() => handleDeactivateCustomer(customer.id)}
+                            >
+                              停用
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedMovie && currentCustomer && (
         <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#101916]/78 px-4 py-6 backdrop-blur-sm sm:py-10">
           <div className="mx-auto max-w-4xl border border-[#d9cbbb] bg-[#fffaf2] shadow-2xl">
             <div className="flex items-start justify-between gap-5 border-b border-[#d9cbbb] p-6 sm:p-8">
@@ -1095,7 +1444,7 @@ function App() {
                         key={`modal-${theme}`}
                         className="bg-[#efe4d6] px-3 py-2 text-xs text-[#5f5548] hover:bg-[#d6a647] hover:text-[#17231f]"
                         onClick={() => {
-                          setActiveTheme(theme);
+                          selectTheme(theme);
                           setSelectedMovie(null);
                           requestAnimationFrame(() => {
                             document.getElementById('movies')?.scrollIntoView({ behavior: 'smooth' });
