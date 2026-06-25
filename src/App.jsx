@@ -484,6 +484,12 @@ const spotlights = [
 const PAGE_SIZE = 24;
 const CUSTOMERS_STORAGE_KEY = 'miracle-movies-customers';
 const CURRENT_CUSTOMER_STORAGE_KEY = 'miracle-movies-current-customer';
+const ADMIN_STORAGE_KEY = 'miracle-movies-admin';
+const ADMIN_SESSION_STORAGE_KEY = 'miracle-movies-admin-session';
+const DEFAULT_ADMIN = {
+  username: 'admin',
+  password: 'weijia77',
+};
 
 const createCustomer = ({ name, email }) => ({
   id: `customer-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -510,6 +516,23 @@ const readStoredCurrentCustomerId = () => {
   }
 };
 
+const readStoredAdmin = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(ADMIN_STORAGE_KEY) || 'null');
+    return parsed?.username && parsed?.password ? parsed : DEFAULT_ADMIN;
+  } catch {
+    return DEFAULT_ADMIN;
+  }
+};
+
+const readStoredAdminSession = () => {
+  try {
+    return localStorage.getItem(ADMIN_SESSION_STORAGE_KEY) === 'active';
+  } catch {
+    return false;
+  }
+};
+
 function App() {
   const [activeTheme, setActiveTheme] = useState('全部');
   const [query, setQuery] = useState('');
@@ -522,6 +545,15 @@ function App() {
   const [customers, setCustomers] = useState(readStoredCustomers);
   const [currentCustomerId, setCurrentCustomerId] = useState(readStoredCurrentCustomerId);
   const [customerForm, setCustomerForm] = useState({ name: '', email: '' });
+  const [customerEditForm, setCustomerEditForm] = useState({ id: '', name: '', email: '' });
+  const [adminCredentials, setAdminCredentials] = useState(readStoredAdmin);
+  const [isAdmin, setIsAdmin] = useState(readStoredAdminSession);
+  const [adminLoginForm, setAdminLoginForm] = useState({ username: 'admin', password: '' });
+  const [adminPasswordForm, setAdminPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
 
   const themeGroups = useMemo(() => buildThemeGroups(movieCatalog), []);
   const enrichedMovies = useMemo(() => movieCatalog.map(enrichMovie), []);
@@ -560,6 +592,7 @@ function App() {
     customers.find((customer) => customer.id === currentCustomerId && customer.status === 'active') ||
     null;
   const activeCustomers = customers.filter((customer) => customer.status === 'active');
+  const canViewDetails = Boolean(currentCustomer || isAdmin);
 
   const persistCustomers = (nextCustomers) => {
     setCustomers(nextCustomers);
@@ -575,6 +608,20 @@ function App() {
     }
   };
 
+  const persistAdminCredentials = (nextCredentials) => {
+    setAdminCredentials(nextCredentials);
+    localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(nextCredentials));
+  };
+
+  const persistAdminSession = (nextIsAdmin) => {
+    setIsAdmin(nextIsAdmin);
+    if (nextIsAdmin) {
+      localStorage.setItem(ADMIN_SESSION_STORAGE_KEY, 'active');
+    } else {
+      localStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
+    }
+  };
+
   const openAccountPanel = (mode = 'login', notice = '') => {
     setAccountMode(mode);
     setAccountNotice(notice);
@@ -584,7 +631,6 @@ function App() {
   const handleCustomerSubmit = (event) => {
     event.preventDefault();
     const email = customerForm.email.trim().toLowerCase();
-    const name = customerForm.name.trim();
 
     if (!email) {
       setAccountNotice('请填写邮箱。');
@@ -593,58 +639,121 @@ function App() {
 
     const existingCustomer = customers.find((customer) => customer.email === email);
 
-    if (accountMode === 'login') {
-      if (!existingCustomer || existingCustomer.status !== 'active') {
-        setAccountNotice('没有找到这个客户账号，请先注册。');
-        setAccountMode('register');
-        return;
-      }
-      persistCurrentCustomerId(existingCustomer.id);
-      setAccountNotice('');
-      setAccountPanelOpen(false);
+    if (!existingCustomer || existingCustomer.status !== 'active') {
+      setAccountNotice('没有找到可用客户账号，请联系管理员添加或启用。');
       return;
     }
 
-    if (!name) {
-      setAccountNotice('请填写客户姓名。');
+    persistCurrentCustomerId(existingCustomer.id);
+    persistAdminSession(false);
+    setAccountNotice('');
+    setAccountPanelOpen(false);
+  };
+
+  const handleAdminLogin = (event) => {
+    event.preventDefault();
+    const username = adminLoginForm.username.trim();
+
+    if (username !== adminCredentials.username || adminLoginForm.password !== adminCredentials.password) {
+      setAccountNotice('管理员账号或密码不正确。');
+      return;
+    }
+
+    persistAdminSession(true);
+    persistCurrentCustomerId('');
+    setAdminLoginForm({ username: adminCredentials.username, password: '' });
+    setAccountNotice('');
+    setAccountMode('manage');
+  };
+
+  const handleSaveCustomer = (event) => {
+    event.preventDefault();
+
+    if (!isAdmin) {
+      setAccountNotice('只有管理员可以维护客户账号。');
+      setAccountMode('adminLogin');
+      return;
+    }
+
+    const name = customerEditForm.name.trim();
+    const email = customerEditForm.email.trim().toLowerCase();
+
+    if (!name || !email) {
+      setAccountNotice('请填写客户姓名和邮箱。');
+      return;
+    }
+
+    const existingCustomer = customers.find((customer) => customer.email === email);
+    if (existingCustomer && existingCustomer.id !== customerEditForm.id) {
+      setAccountNotice('这个邮箱已被其他客户使用。');
+      return;
+    }
+
+    if (customerEditForm.id) {
+      const nextCustomers = customers.map((customer) =>
+        customer.id === customerEditForm.id ? { ...customer, name, email } : customer,
+      );
+      persistCustomers(nextCustomers);
+      setCustomerEditForm({ id: '', name: '', email: '' });
+      setAccountNotice('客户资料已更新。');
       return;
     }
 
     if (existingCustomer) {
-      if (existingCustomer.status === 'active') {
-        persistCurrentCustomerId(existingCustomer.id);
-        setAccountNotice('');
-        setAccountPanelOpen(false);
-        return;
-      }
-
       const nextCustomers = customers.map((customer) =>
         customer.id === existingCustomer.id
-          ? { ...customer, name, status: 'active' }
+          ? { ...customer, name, email, status: 'active' }
           : customer,
       );
       persistCustomers(nextCustomers);
-      persistCurrentCustomerId(existingCustomer.id);
-      setAccountPanelOpen(false);
+      setCustomerEditForm({ id: '', name: '', email: '' });
+      setAccountNotice('客户账号已重新启用。');
       return;
     }
 
     const nextCustomer = createCustomer({ name, email });
     persistCustomers([...customers, nextCustomer]);
-    persistCurrentCustomerId(nextCustomer.id);
-    setCustomerForm({ name: '', email: '' });
-    setAccountNotice('');
-    setAccountPanelOpen(false);
+    setCustomerEditForm({ id: '', name: '', email: '' });
+    setAccountNotice('客户账号已添加。');
+  };
+
+  const handleAdminPasswordChange = (event) => {
+    event.preventDefault();
+
+    if (adminPasswordForm.currentPassword !== adminCredentials.password) {
+      setAccountNotice('当前管理员密码不正确。');
+      return;
+    }
+
+    if (!adminPasswordForm.newPassword || adminPasswordForm.newPassword.length < 6) {
+      setAccountNotice('新密码至少需要 6 位。');
+      return;
+    }
+
+    if (adminPasswordForm.newPassword !== adminPasswordForm.confirmPassword) {
+      setAccountNotice('两次输入的新密码不一致。');
+      return;
+    }
+
+    persistAdminCredentials({
+      ...adminCredentials,
+      password: adminPasswordForm.newPassword,
+    });
+    setAdminPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    setAccountNotice('管理员密码已更新。');
   };
 
   const handleLogout = () => {
     persistCurrentCustomerId('');
+    persistAdminSession(false);
     setSelectedMovie(null);
   };
 
-  const handleDeactivateCustomer = (customerId) => {
+  const handleToggleCustomerStatus = (customerId) => {
     const nextCustomers = customers.map((customer) =>
-      customer.id === customerId ? { ...customer, status: 'inactive' } : customer,
+      customer.id === customerId
+        ? { ...customer, status: customer.status === 'active' ? 'inactive' : 'active' }
+        : customer,
     );
     persistCustomers(nextCustomers);
     if (customerId === currentCustomerId) {
@@ -654,7 +763,7 @@ function App() {
   };
 
   const handleOpenMovieDetails = (movie) => {
-    if (!currentCustomer) {
+    if (!canViewDetails) {
       openAccountPanel('login', '游客可以查询电影库；查看详情需要客户账号。');
       return;
     }
@@ -705,7 +814,22 @@ function App() {
           </div>
 
           <div className="hidden items-center gap-3 md:flex">
-            {currentCustomer ? (
+            {isAdmin ? (
+              <>
+                <button
+                  className="inline-flex items-center gap-2 border border-white/20 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/10"
+                  onClick={() => openAccountPanel('manage')}
+                >
+                  <Users size={16} /> 管理员
+                </button>
+                <button
+                  className="inline-flex items-center gap-2 bg-white/10 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/16"
+                  onClick={handleLogout}
+                >
+                  <LogOut size={16} /> 退出
+                </button>
+              </>
+            ) : currentCustomer ? (
               <>
                 <button
                   className="inline-flex items-center gap-2 border border-white/20 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/10"
@@ -754,11 +878,11 @@ function App() {
               className="mt-2 flex w-full items-center justify-center gap-2 bg-[#d6a647] px-4 py-3 text-sm font-bold text-[#17231f]"
               onClick={() => {
                 setMobileOpen(false);
-                openAccountPanel(currentCustomer ? 'manage' : 'login');
+                openAccountPanel(isAdmin ? 'manage' : 'login');
               }}
             >
-              {currentCustomer ? <Users size={16} /> : <LogIn size={16} />}
-              {currentCustomer ? currentCustomer.name : '客户登录'}
+              {isAdmin || currentCustomer ? <Users size={16} /> : <LogIn size={16} />}
+              {isAdmin ? '管理员' : currentCustomer ? currentCustomer.name : '客户登录'}
             </button>
           </div>
         )}
@@ -977,7 +1101,7 @@ function App() {
                     <div className="flex flex-wrap gap-2 xl:justify-end">
                       <button
                         className={`inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold ${
-                          currentCustomer
+                          canViewDetails
                             ? 'bg-[#17231f] text-white hover:bg-[#263a34]'
                             : 'border border-[#d9cbbb] bg-[#efe4d6] text-[#665d52] hover:border-[#9b6d22]'
                         }`}
@@ -1203,9 +1327,11 @@ function App() {
               <div className="mb-6 flex flex-wrap gap-2">
                 {[
                   ['login', '登录'],
-                  ['register', '注册客户'],
-                  ['manage', '客户列表'],
-                ].map(([mode, label]) => (
+                  ['adminLogin', '管理员登录'],
+                  ['manage', '客户维护'],
+                ]
+                  .filter(([mode]) => mode !== 'manage' || isAdmin)
+                  .map(([mode, label]) => (
                   <button
                     key={mode}
                     className={`px-4 py-2 text-sm font-bold ${
@@ -1229,23 +1355,10 @@ function App() {
                 </div>
               )}
 
-              {accountMode !== 'manage' && (
+              {accountMode === 'login' && (
                 <form className="grid gap-4" onSubmit={handleCustomerSubmit}>
-                  {accountMode === 'register' && (
-                    <label className="grid gap-2 text-sm font-semibold text-[#4d463c]">
-                      客户姓名
-                      <input
-                        className="border border-[#d9cbbb] bg-white px-4 py-3 text-sm font-normal outline-none focus:border-[#9b6d22]"
-                        value={customerForm.name}
-                        onChange={(event) =>
-                          setCustomerForm((form) => ({ ...form, name: event.target.value }))
-                        }
-                        placeholder="填写姓名或昵称"
-                      />
-                    </label>
-                  )}
                   <label className="grid gap-2 text-sm font-semibold text-[#4d463c]">
-                    邮箱
+                    客户邮箱
                     <input
                       className="border border-[#d9cbbb] bg-white px-4 py-3 text-sm font-normal outline-none focus:border-[#9b6d22]"
                       type="email"
@@ -1261,18 +1374,63 @@ function App() {
                       className="inline-flex items-center justify-center gap-2 bg-[#17231f] px-5 py-3 text-sm font-bold text-white hover:bg-[#263a34]"
                       type="submit"
                     >
-                      {accountMode === 'login' ? <LogIn size={16} /> : <UserPlus size={16} />}
-                      {accountMode === 'login' ? '登录并查看详情' : '创建客户账号'}
+                      <LogIn size={16} /> 登录并查看详情
                     </button>
                     <button
                       className="border border-[#17231f] px-5 py-3 text-sm font-bold text-[#17231f] hover:bg-[#17231f] hover:text-white"
                       type="button"
                       onClick={() => {
-                        setAccountMode(accountMode === 'login' ? 'register' : 'login');
+                        setAccountMode('adminLogin');
                         setAccountNotice('');
                       }}
                     >
-                      {accountMode === 'login' ? '没有账号，去注册' : '已有账号，去登录'}
+                      管理员登录
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {accountMode === 'adminLogin' && (
+                <form className="grid gap-4" onSubmit={handleAdminLogin}>
+                  <label className="grid gap-2 text-sm font-semibold text-[#4d463c]">
+                    管理员账号
+                    <input
+                      className="border border-[#d9cbbb] bg-white px-4 py-3 text-sm font-normal outline-none focus:border-[#9b6d22]"
+                      value={adminLoginForm.username}
+                      onChange={(event) =>
+                        setAdminLoginForm((form) => ({ ...form, username: event.target.value }))
+                      }
+                      placeholder="admin"
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-semibold text-[#4d463c]">
+                    管理员密码
+                    <input
+                      className="border border-[#d9cbbb] bg-white px-4 py-3 text-sm font-normal outline-none focus:border-[#9b6d22]"
+                      type="password"
+                      value={adminLoginForm.password}
+                      onChange={(event) =>
+                        setAdminLoginForm((form) => ({ ...form, password: event.target.value }))
+                      }
+                      placeholder="输入管理员密码"
+                    />
+                  </label>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <button
+                      className="inline-flex items-center justify-center gap-2 bg-[#17231f] px-5 py-3 text-sm font-bold text-white hover:bg-[#263a34]"
+                      type="submit"
+                    >
+                      <LogIn size={16} /> 进入客户管理
+                    </button>
+                    <button
+                      className="border border-[#17231f] px-5 py-3 text-sm font-bold text-[#17231f] hover:bg-[#17231f] hover:text-white"
+                      type="button"
+                      onClick={() => {
+                        setAccountMode('login');
+                        setAccountNotice('');
+                      }}
+                    >
+                      返回客户登录
                     </button>
                   </div>
                 </form>
@@ -1280,63 +1438,166 @@ function App() {
 
               {accountMode === 'manage' && (
                 <div>
-                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  {!isAdmin && (
+                    <div className="border-l-4 border-[#d6a647] bg-white px-4 py-3 text-sm font-semibold text-[#5f5548]">
+                      请先使用管理员账号登录，才能维护客户账号。
+                    </div>
+                  )}
+
+                  {isAdmin && (
+                    <>
+                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm leading-6 text-[#665d52]">
-                      当前本机共有 {activeCustomers.length} 个有效客户账号。
-                      {currentCustomer ? ` 已登录：${currentCustomer.name}` : ' 当前为游客模式。'}
+                      当前共有 {customers.length} 个客户账号，其中 {activeCustomers.length} 个有效账号。
                     </p>
-                    {!currentCustomer && (
-                      <button
-                        className="inline-flex items-center justify-center gap-2 bg-[#17231f] px-4 py-2 text-sm font-bold text-white hover:bg-[#263a34]"
-                        onClick={() => setAccountMode('login')}
-                      >
-                        <LogIn size={16} /> 登录
-                      </button>
-                    )}
+                    <button
+                      className="inline-flex items-center justify-center gap-2 border border-[#17231f] px-4 py-2 text-sm font-bold text-[#17231f] hover:bg-[#17231f] hover:text-white"
+                      onClick={handleLogout}
+                    >
+                      <LogOut size={16} /> 退出管理员
+                    </button>
                   </div>
 
-                  <div className="overflow-hidden border border-[#d9cbbb] bg-white">
-                    {activeCustomers.length === 0 ? (
+                  <form className="mb-6 grid gap-4 border border-[#d9cbbb] bg-white p-4" onSubmit={handleSaveCustomer}>
+                    <p className="font-serif text-xl font-semibold">
+                      {customerEditForm.id ? '修改客户' : '添加客户'}
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="grid gap-2 text-sm font-semibold text-[#4d463c]">
+                        客户姓名
+                        <input
+                          className="border border-[#d9cbbb] bg-[#fffaf2] px-4 py-3 text-sm font-normal outline-none focus:border-[#9b6d22]"
+                          value={customerEditForm.name}
+                          onChange={(event) =>
+                            setCustomerEditForm((form) => ({ ...form, name: event.target.value }))
+                          }
+                          placeholder="填写姓名或昵称"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm font-semibold text-[#4d463c]">
+                        客户邮箱
+                        <input
+                          className="border border-[#d9cbbb] bg-[#fffaf2] px-4 py-3 text-sm font-normal outline-none focus:border-[#9b6d22]"
+                          type="email"
+                          value={customerEditForm.email}
+                          onChange={(event) =>
+                            setCustomerEditForm((form) => ({ ...form, email: event.target.value }))
+                          }
+                          placeholder="name@example.com"
+                        />
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        className="inline-flex items-center justify-center gap-2 bg-[#17231f] px-5 py-3 text-sm font-bold text-white hover:bg-[#263a34]"
+                        type="submit"
+                      >
+                        <UserPlus size={16} /> {customerEditForm.id ? '保存修改' : '添加客户'}
+                      </button>
+                      {customerEditForm.id && (
+                        <button
+                          className="border border-[#17231f] px-5 py-3 text-sm font-bold text-[#17231f] hover:bg-[#17231f] hover:text-white"
+                          type="button"
+                          onClick={() => {
+                            setCustomerEditForm({ id: '', name: '', email: '' });
+                            setAccountNotice('');
+                          }}
+                        >
+                          取消修改
+                        </button>
+                      )}
+                    </div>
+                  </form>
+
+                  <div className="mb-6 overflow-hidden border border-[#d9cbbb] bg-white">
+                    {customers.length === 0 ? (
                       <div className="p-8 text-center">
                         <p className="font-serif text-2xl">还没有客户账号</p>
                         <button
                           className="mt-4 bg-[#17231f] px-5 py-3 text-sm font-bold text-white"
-                          onClick={() => setAccountMode('register')}
+                          onClick={() => setCustomerEditForm({ id: '', name: '', email: '' })}
                         >
-                          创建第一个客户
+                          在上方添加客户
                         </button>
                       </div>
                     ) : (
-                      activeCustomers.map((customer) => (
+                      customers.map((customer) => (
                         <div
                           key={customer.id}
                           className="flex flex-col gap-3 border-b border-[#eadfd1] p-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
                         >
                           <div>
                             <p className="font-serif text-xl font-semibold">{customer.name}</p>
-                            <p className="mt-1 text-sm text-[#665d52]">{customer.email}</p>
+                            <p className="mt-1 text-sm text-[#665d52]">
+                              {customer.email} · {customer.status === 'active' ? '有效' : '已停用'}
+                            </p>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             <button
                               className="border border-[#17231f] px-3 py-2 text-xs font-bold text-[#17231f] hover:bg-[#17231f] hover:text-white"
                               onClick={() => {
-                                persistCurrentCustomerId(customer.id);
-                                setAccountPanelOpen(false);
+                                setCustomerEditForm({
+                                  id: customer.id,
+                                  name: customer.name,
+                                  email: customer.email,
+                                });
+                                setAccountNotice('');
                               }}
                             >
-                              设为当前客户
+                              修改
                             </button>
                             <button
                               className="border border-[#b2764f] px-3 py-2 text-xs font-bold text-[#7b4429] hover:bg-[#7b4429] hover:text-white"
-                              onClick={() => handleDeactivateCustomer(customer.id)}
+                              onClick={() => handleToggleCustomerStatus(customer.id)}
                             >
-                              停用
+                              {customer.status === 'active' ? '停用' : '启用'}
                             </button>
                           </div>
                         </div>
                       ))
                     )}
                   </div>
+
+                  <form className="grid gap-4 border border-[#d9cbbb] bg-white p-4" onSubmit={handleAdminPasswordChange}>
+                    <p className="font-serif text-xl font-semibold">修改管理员密码</p>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <input
+                        className="border border-[#d9cbbb] bg-[#fffaf2] px-4 py-3 text-sm outline-none focus:border-[#9b6d22]"
+                        type="password"
+                        value={adminPasswordForm.currentPassword}
+                        onChange={(event) =>
+                          setAdminPasswordForm((form) => ({ ...form, currentPassword: event.target.value }))
+                        }
+                        placeholder="当前密码"
+                      />
+                      <input
+                        className="border border-[#d9cbbb] bg-[#fffaf2] px-4 py-3 text-sm outline-none focus:border-[#9b6d22]"
+                        type="password"
+                        value={adminPasswordForm.newPassword}
+                        onChange={(event) =>
+                          setAdminPasswordForm((form) => ({ ...form, newPassword: event.target.value }))
+                        }
+                        placeholder="新密码"
+                      />
+                      <input
+                        className="border border-[#d9cbbb] bg-[#fffaf2] px-4 py-3 text-sm outline-none focus:border-[#9b6d22]"
+                        type="password"
+                        value={adminPasswordForm.confirmPassword}
+                        onChange={(event) =>
+                          setAdminPasswordForm((form) => ({ ...form, confirmPassword: event.target.value }))
+                        }
+                        placeholder="确认新密码"
+                      />
+                    </div>
+                    <button
+                      className="w-fit bg-[#17231f] px-5 py-3 text-sm font-bold text-white hover:bg-[#263a34]"
+                      type="submit"
+                    >
+                      更新密码
+                    </button>
+                  </form>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -1344,7 +1605,7 @@ function App() {
         </div>
       )}
 
-      {selectedMovie && currentCustomer && (
+      {selectedMovie && canViewDetails && (
         <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#101916]/78 px-4 py-6 backdrop-blur-sm sm:py-10">
           <div className="mx-auto max-w-4xl border border-[#d9cbbb] bg-[#fffaf2] shadow-2xl">
             <div className="flex items-start justify-between gap-5 border-b border-[#d9cbbb] p-6 sm:p-8">
