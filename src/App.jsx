@@ -540,6 +540,7 @@ function App() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedMovie, setSelectedMovie] = useState(null);
+  const [selectedMovieIsPublic, setSelectedMovieIsPublic] = useState(false);
   const [accountPanelOpen, setAccountPanelOpen] = useState(false);
   const [accountMode, setAccountMode] = useState('login');
   const [accountNotice, setAccountNotice] = useState('');
@@ -562,6 +563,16 @@ function App() {
 
   const themeGroups = useMemo(() => buildThemeGroups(movieCatalog), []);
   const enrichedMovies = useMemo(() => movieCatalog.map(enrichMovie), []);
+  const featuredDetails = useMemo(
+    () =>
+      featuredMovies.map((featuredMovie) => ({
+        ...featuredMovie,
+        details:
+          enrichedMovies.find((movie) => movie.titleCn === featuredMovie.title) ||
+          enrichedMovies.find((movie) => normalizeMovieTitle(movie.title) === featuredMovie.title),
+      })),
+    [enrichedMovies],
+  );
 
   const filteredMovies = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -815,6 +826,7 @@ function App() {
     persistCurrentCustomerId('');
     persistAdminSession(false);
     setSelectedMovie(null);
+    setSelectedMovieIsPublic(false);
   };
 
   const handleToggleCustomerStatus = (customerId) => {
@@ -827,14 +839,21 @@ function App() {
     if (customerId === currentCustomerId) {
       persistCurrentCustomerId('');
       setSelectedMovie(null);
+      setSelectedMovieIsPublic(false);
     }
   };
 
-  const handleOpenMovieDetails = (movie) => {
-    if (!canViewDetails) {
+  const closeMovieDetails = () => {
+    setSelectedMovie(null);
+    setSelectedMovieIsPublic(false);
+  };
+
+  const handleOpenMovieDetails = (movie, options = {}) => {
+    if (!options.publicAccess && !canViewDetails) {
       openAccountPanel('login', '游客可以查询电影库；查看详情需要客户账号。');
       return;
     }
+    setSelectedMovieIsPublic(Boolean(options.publicAccess));
     setSelectedMovie(movie);
   };
 
@@ -1087,10 +1106,16 @@ function App() {
               </div>
 
               <div className="mb-8 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                {featuredMovies.slice(0, 4).map((movie) => (
-                  <article
+                {featuredDetails.slice(0, 4).map((movie) => (
+                  <button
                     key={movie.title}
-                    className="grid overflow-hidden border border-[#d9cbbb] bg-[#fffaf2] shadow-sm sm:grid-cols-[170px_minmax(0,1fr)]"
+                    className="grid overflow-hidden border border-[#d9cbbb] bg-[#fffaf2] text-left shadow-sm transition hover:border-[#9b6d22] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#9b6d22] sm:grid-cols-[170px_minmax(0,1fr)]"
+                    type="button"
+                    onClick={() => {
+                      if (movie.details) {
+                        handleOpenMovieDetails(movie.details, { publicAccess: true });
+                      }
+                    }}
                   >
                     <img
                       className="h-40 w-full object-cover sm:h-full"
@@ -1107,7 +1132,7 @@ function App() {
                       </h3>
                       <p className="mt-3 text-sm leading-6 text-[#5f5548]">{movie.guide}</p>
                     </div>
-                  </article>
+                  </button>
                 ))}
               </div>
 
@@ -1696,7 +1721,7 @@ function App() {
         </div>
       )}
 
-      {selectedMovie && canViewDetails && (
+      {selectedMovie && (canViewDetails || selectedMovieIsPublic) && (
         <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#101916]/78 px-4 py-6 backdrop-blur-sm sm:py-10">
           <div className="mx-auto max-w-4xl border border-[#d9cbbb] bg-[#fffaf2] shadow-2xl">
             <div className="flex items-start justify-between gap-5 border-b border-[#d9cbbb] p-6 sm:p-8">
@@ -1718,7 +1743,7 @@ function App() {
               </div>
               <button
                 className="flex h-10 w-10 shrink-0 items-center justify-center border border-[#17231f] text-[#17231f] hover:bg-[#17231f] hover:text-white"
-                onClick={() => setSelectedMovie(null)}
+                onClick={closeMovieDetails}
                 aria-label="关闭详情"
               >
                 <X size={20} />
@@ -1797,7 +1822,7 @@ function App() {
                         className="bg-[#efe4d6] px-3 py-2 text-xs text-[#5f5548] hover:bg-[#d6a647] hover:text-[#17231f]"
                         onClick={() => {
                           selectTheme(theme);
-                          setSelectedMovie(null);
+                          closeMovieDetails();
                           requestAnimationFrame(() => {
                             document.getElementById('movies')?.scrollIntoView({ behavior: 'smooth' });
                           });
@@ -1887,7 +1912,7 @@ function App() {
                   )}
                   <button
                     className="inline-flex items-center justify-center gap-2 border border-[#17231f] px-5 py-3 text-sm font-bold text-[#17231f] hover:bg-[#17231f] hover:text-white"
-                    onClick={() => setSelectedMovie(null)}
+                    onClick={closeMovieDetails}
                   >
                     回到列表
                   </button>
