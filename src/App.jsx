@@ -1155,16 +1155,24 @@ function App() {
               <div className="overflow-hidden border border-[#d9cbbb] bg-[#fffaf2]">
                 {pagedMovies.map((movie, index) => {
                   const isPreviewLocked = !canViewDetails && safeCurrentPage === 1 && index >= 3;
-                  const previewClass = isPreviewLocked
-                    ? 'blur-sm opacity-55 select-none pointer-events-none'
-                    : '';
+                  const previewStyle = isPreviewLocked
+                    ? {
+                        filter: 'blur(4px)',
+                        opacity: 0.42,
+                        pointerEvents: 'none',
+                        userSelect: 'none',
+                      }
+                    : undefined;
 
                   return (
                     <article
                       key={movie.id}
                       className="grid gap-4 border-b border-[#eadfD1] p-5 last:border-b-0 md:grid-cols-[88px_minmax(0,0.9fr)_minmax(0,1.1fr)] xl:grid-cols-[88px_minmax(0,0.8fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_auto] xl:items-center"
                     >
-                      <div className={`h-32 w-[88px] overflow-hidden border border-[#d9cbbb] bg-[#17231f] shadow-sm ${previewClass}`}>
+                      <div
+                        className="h-32 w-[88px] overflow-hidden border border-[#d9cbbb] bg-[#17231f] shadow-sm"
+                        style={previewStyle}
+                      >
                         {movie.poster ? (
                           <img
                             className="h-full w-full object-cover"
@@ -1188,7 +1196,7 @@ function App() {
                           </div>
                         )}
                       </div>
-                      <div className={previewClass}>
+                      <div style={previewStyle}>
                         <p className="text-[11px] font-bold tracking-[0.18em] text-[#9b6d22]">
                           编号 #{movie.id}
                         </p>
@@ -1199,7 +1207,7 @@ function App() {
                           {movie.title}
                         </p>
                       </div>
-                      <div className={`flex flex-wrap gap-2 ${previewClass}`}>
+                      <div className="flex flex-wrap gap-2" style={previewStyle}>
                         {movie.themes.map((theme) => (
                           <button
                             key={`${movie.id}-${theme}`}
@@ -1210,7 +1218,7 @@ function App() {
                           </button>
                         ))}
                       </div>
-                      <p className={`text-sm leading-6 text-[#5f5548] ${previewClass}`}>
+                      <p className="text-sm leading-6 text-[#5f5548]" style={previewStyle}>
                         {movie.intro}
                       </p>
                       <div className="flex flex-wrap gap-2 xl:justify-end">
