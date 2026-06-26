@@ -1153,74 +1153,81 @@ function App() {
               </div>
 
               <div className="overflow-hidden border border-[#d9cbbb] bg-[#fffaf2]">
-                {pagedMovies.map((movie, index) => (
-                  <article
-                    key={movie.id}
-                    className="grid gap-4 border-b border-[#eadfD1] p-5 last:border-b-0 md:grid-cols-[88px_minmax(0,0.9fr)_minmax(0,1.1fr)] xl:grid-cols-[88px_minmax(0,0.8fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_auto] xl:items-center"
-                  >
-                    <div className="h-32 w-[88px] overflow-hidden border border-[#d9cbbb] bg-[#17231f] shadow-sm">
-                      {movie.poster ? (
-                        <img
-                          className="h-full w-full object-cover"
-                          src={movie.posterThumb || movie.poster}
-                          alt={`${movie.titleCn} 海报`}
-                          width="88"
-                          height="128"
-                          loading={index < 6 ? 'eager' : 'lazy'}
-                          decoding="async"
-                          fetchPriority={index < 6 ? 'high' : 'auto'}
-                        />
-                      ) : (
-                        <div
-                          className="flex h-full w-full flex-col justify-between p-3 text-white"
-                          style={{ background: movie.visualAccent }}
-                        >
-                          <Clapperboard size={18} className="text-[#f0c86a]" />
-                          <span className="font-serif text-sm font-semibold leading-tight">
-                            {movie.titleCn}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-bold tracking-[0.18em] text-[#9b6d22]">
-                        编号 #{movie.id}
+                {pagedMovies.map((movie, index) => {
+                  const isPreviewLocked = !canViewDetails && safeCurrentPage === 1 && index >= 3;
+                  const previewClass = isPreviewLocked
+                    ? 'blur-sm opacity-55 select-none pointer-events-none'
+                    : '';
+
+                  return (
+                    <article
+                      key={movie.id}
+                      className="grid gap-4 border-b border-[#eadfD1] p-5 last:border-b-0 md:grid-cols-[88px_minmax(0,0.9fr)_minmax(0,1.1fr)] xl:grid-cols-[88px_minmax(0,0.8fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_auto] xl:items-center"
+                    >
+                      <div className={`h-32 w-[88px] overflow-hidden border border-[#d9cbbb] bg-[#17231f] shadow-sm ${previewClass}`}>
+                        {movie.poster ? (
+                          <img
+                            className="h-full w-full object-cover"
+                            src={movie.posterThumb || movie.poster}
+                            alt={`${movie.titleCn} 海报`}
+                            width="88"
+                            height="128"
+                            loading={index < 6 ? 'eager' : 'lazy'}
+                            decoding="async"
+                            fetchPriority={index < 6 ? 'high' : 'auto'}
+                          />
+                        ) : (
+                          <div
+                            className="flex h-full w-full flex-col justify-between p-3 text-white"
+                            style={{ background: movie.visualAccent }}
+                          >
+                            <Clapperboard size={18} className="text-[#f0c86a]" />
+                            <span className="font-serif text-sm font-semibold leading-tight">
+                              {movie.titleCn}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className={previewClass}>
+                        <p className="text-[11px] font-bold tracking-[0.18em] text-[#9b6d22]">
+                          编号 #{movie.id}
+                        </p>
+                        <h3 className="mt-1 font-serif text-xl font-semibold leading-tight">
+                          {movie.titleCn}
+                        </h3>
+                        <p className="mt-1 text-xs text-[#8a7a66]">
+                          {movie.title}
+                        </p>
+                      </div>
+                      <div className={`flex flex-wrap gap-2 ${previewClass}`}>
+                        {movie.themes.map((theme) => (
+                          <button
+                            key={`${movie.id}-${theme}`}
+                            onClick={() => selectTheme(theme)}
+                            className="bg-[#efe4d6] px-2.5 py-1.5 text-xs text-[#5f5548] hover:bg-[#d6a647] hover:text-[#17231f]"
+                          >
+                            {translateTheme(theme)}
+                          </button>
+                        ))}
+                      </div>
+                      <p className={`text-sm leading-6 text-[#5f5548] ${previewClass}`}>
+                        {movie.intro}
                       </p>
-                      <h3 className="mt-1 font-serif text-xl font-semibold leading-tight">
-                        {movie.titleCn}
-                      </h3>
-                      <p className="mt-1 text-xs text-[#8a7a66]">
-                        {movie.title}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {movie.themes.map((theme) => (
+                      <div className="flex flex-wrap gap-2 xl:justify-end">
                         <button
-                          key={`${movie.id}-${theme}`}
-                          onClick={() => selectTheme(theme)}
-                          className="bg-[#efe4d6] px-2.5 py-1.5 text-xs text-[#5f5548] hover:bg-[#d6a647] hover:text-[#17231f]"
+                          className={`inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold ${
+                            canViewDetails
+                              ? 'bg-[#17231f] text-white hover:bg-[#263a34]'
+                              : 'border border-[#d9cbbb] bg-[#efe4d6] text-[#665d52] hover:border-[#9b6d22]'
+                          }`}
+                          onClick={() => handleOpenMovieDetails(movie)}
                         >
-                          {translateTheme(theme)}
+                          查看详情 <ArrowRight size={14} />
                         </button>
-                      ))}
-                    </div>
-                    <p className="text-sm leading-6 text-[#5f5548]">
-                      {movie.intro}
-                    </p>
-                    <div className="flex flex-wrap gap-2 xl:justify-end">
-                      <button
-                        className={`inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold ${
-                          canViewDetails
-                            ? 'bg-[#17231f] text-white hover:bg-[#263a34]'
-                            : 'border border-[#d9cbbb] bg-[#efe4d6] text-[#665d52] hover:border-[#9b6d22]'
-                        }`}
-                        onClick={() => handleOpenMovieDetails(movie)}
-                      >
-                        查看详情 <ArrowRight size={14} />
-                      </button>
-                    </div>
-                  </article>
-                ))}
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
 
               {filteredMovies.length > 0 && (
