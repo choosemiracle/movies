@@ -864,6 +864,15 @@ function App() {
     setSelectedMovie(movie);
   };
 
+  const goToPage = (nextPage) => {
+    const targetPage = Math.max(1, Math.min(totalPages, nextPage));
+    if (targetPage > 1 && !canViewDetails) {
+      openAccountPanel('login', '游客可以查看电影库第一页；查看更多分页需要客户账号。');
+      return;
+    }
+    setCurrentPage(targetPage);
+  };
+
   const selectTheme = (theme) => {
     setActiveTheme(theme);
     setCurrentPage(1);
@@ -1224,7 +1233,7 @@ function App() {
                     <button
                       className="border border-[#17231f] px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-35"
                       disabled={safeCurrentPage === 1}
-                      onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                      onClick={() => goToPage(safeCurrentPage - 1)}
                     >
                       上一页
                     </button>
@@ -1246,7 +1255,7 @@ function App() {
                                   ? 'bg-[#d6a647] text-[#17231f]'
                                   : 'border border-[#d9cbbb] bg-white text-[#5f5548] hover:bg-[#efe4d6]'
                               }`}
-                              onClick={() => setCurrentPage(page)}
+                              onClick={() => goToPage(page)}
                             >
                               {page}
                             </button>
@@ -1256,7 +1265,7 @@ function App() {
                     <button
                       className="border border-[#17231f] px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-35"
                       disabled={safeCurrentPage === totalPages}
-                      onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                      onClick={() => goToPage(safeCurrentPage + 1)}
                     >
                       下一页
                     </button>
