@@ -495,9 +495,14 @@ const CUSTOMERS_STORAGE_KEY = 'miracle-movies-customers';
 const CURRENT_CUSTOMER_STORAGE_KEY = 'miracle-movies-current-customer';
 const ADMIN_STORAGE_KEY = 'miracle-movies-admin';
 const ADMIN_SESSION_STORAGE_KEY = 'miracle-movies-admin-session';
+const GUEST_SESSION_STORAGE_KEY = 'miracle-movies-guest-session';
 const DEFAULT_ADMIN = {
   username: 'admin',
   password: 'weijia77',
+};
+const GUEST_ACCOUNT = {
+  username: 'guest',
+  password: 'asyouwish',
 };
 
 const createCustomer = ({ name, email, password }) => ({
@@ -543,6 +548,14 @@ const readStoredAdminSession = () => {
   }
 };
 
+const readStoredGuestSession = () => {
+  try {
+    return localStorage.getItem(GUEST_SESSION_STORAGE_KEY) === 'active';
+  } catch {
+    return false;
+  }
+};
+
 function App() {
   const [activeTheme, setActiveTheme] = useState('全部');
   const [query, setQuery] = useState('');
@@ -559,6 +572,7 @@ function App() {
   const [customerEditForm, setCustomerEditForm] = useState({ id: '', name: '', email: '', password: '' });
   const [adminCredentials, setAdminCredentials] = useState(readStoredAdmin);
   const [isAdmin, setIsAdmin] = useState(readStoredAdminSession);
+  const [isGuest, setIsGuest] = useState(readStoredGuestSession);
   const [adminPasswordForm, setAdminPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
@@ -616,6 +630,7 @@ function App() {
     null;
   const activeCustomers = customers.filter((customer) => customer.status === 'active');
   const canViewDetails = Boolean(currentCustomer || isAdmin);
+  const guestAccessibleMovieIds = new Set(filteredMovies.slice(0, 3).map((movie) => movie.id));
 
   const persistCustomers = (nextCustomers) => {
     setCustomers(nextCustomers);
@@ -645,6 +660,15 @@ function App() {
     }
   };
 
+  const persistGuestSession = (nextIsGuest) => {
+    setIsGuest(nextIsGuest);
+    if (nextIsGuest) {
+      localStorage.setItem(GUEST_SESSION_STORAGE_KEY, 'active');
+    } else {
+      localStorage.removeItem(GUEST_SESSION_STORAGE_KEY);
+    }
+  };
+
   const openAccountPanel = (mode = 'login', notice = '') => {
     setAccountMode(mode);
     setAccountNotice(notice);
@@ -668,10 +692,26 @@ function App() {
       }
 
       persistAdminSession(true);
+      persistGuestSession(false);
       persistCurrentCustomerId('');
       setLoginForm({ account: '', password: '' });
       setAccountNotice('');
       setAccountMode('manage');
+      return;
+    }
+
+    if (account.toLowerCase() === GUEST_ACCOUNT.username) {
+      if (password !== GUEST_ACCOUNT.password) {
+        setAccountNotice('账号或密码不正确。');
+        return;
+      }
+
+      persistGuestSession(true);
+      persistAdminSession(false);
+      persistCurrentCustomerId('');
+      setLoginForm({ account: '', password: '' });
+      setAccountNotice('');
+      setAccountPanelOpen(false);
       return;
     }
 
@@ -694,6 +734,7 @@ function App() {
 
     persistCurrentCustomerId(existingCustomer.id);
     persistAdminSession(false);
+    persistGuestSession(false);
     setLoginForm({ account: '', password: '' });
     setAccountNotice('');
     setAccountPanelOpen(false);
@@ -832,6 +873,7 @@ function App() {
   const handleLogout = () => {
     persistCurrentCustomerId('');
     persistAdminSession(false);
+    persistGuestSession(false);
     setSelectedMovie(null);
     setSelectedMovieIsPublic(false);
   };
@@ -856,8 +898,14 @@ function App() {
   };
 
   const handleOpenMovieDetails = (movie, options = {}) => {
-    if (!options.publicAccess && !canViewDetails) {
-      openAccountPanel('login', '游客可以查询电影库；查看详情需要客户账号。');
+    const canGuestViewMovie = isGuest && guestAccessibleMovieIds.has(movie.id);
+    if (!options.publicAccess && !canViewDetails && !canGuestViewMovie) {
+      openAccountPanel(
+        'login',
+        isGuest
+          ? 'guest 账号只能查看当前搜索结果前 3 项的详情；更多内容需要客户账号。'
+          : '游客可以查询电影库；查看详情需要登录。',
+      );
       return;
     }
     setSelectedMovieIsPublic(Boolean(options.publicAccess));
@@ -932,6 +980,21 @@ function App() {
                   <LogOut size={16} /> 退出
                 </button>
               </>
+            ) : isGuest ? (
+              <>
+                <button
+                  className="inline-flex items-center gap-2 border border-white/20 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/10"
+                  onClick={() => openAccountPanel('login')}
+                >
+                  <Users size={16} /> guest
+                </button>
+                <button
+                  className="inline-flex items-center gap-2 bg-white/10 px-3 py-2 text-sm font-semibold text-white/85 hover:bg-white/16"
+                  onClick={handleLogout}
+                >
+                  <LogOut size={16} /> 退出
+                </button>
+              </>
             ) : currentCustomer ? (
               <>
                 <button
@@ -984,8 +1047,8 @@ function App() {
                 openAccountPanel(isAdmin ? 'manage' : currentCustomer ? 'profile' : 'login');
               }}
             >
-              {isAdmin || currentCustomer ? <Users size={16} /> : <LogIn size={16} />}
-              {isAdmin ? '管理员' : currentCustomer ? currentCustomer.name : '登录'}
+              {isAdmin || currentCustomer || isGuest ? <Users size={16} /> : <LogIn size={16} />}
+              {isAdmin ? '管理员' : currentCustomer ? currentCustomer.name : isGuest ? 'guest' : '登录'}
             </button>
           </div>
         )}
@@ -1155,6 +1218,7 @@ function App() {
               <div className="overflow-hidden border border-[#d9cbbb] bg-[#fffaf2]">
                 {pagedMovies.map((movie, index) => {
                   const isPreviewLocked = !canViewDetails && safeCurrentPage === 1 && index >= 3;
+                  const canOpenMovieDetails = canViewDetails || (isGuest && guestAccessibleMovieIds.has(movie.id));
                   const previewStyle = isPreviewLocked
                     ? {
                         filter: 'blur(4px)',
@@ -1224,7 +1288,7 @@ function App() {
                       <div className="flex flex-wrap gap-2 xl:justify-end">
                         <button
                           className={`inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold ${
-                            canViewDetails
+                            canOpenMovieDetails
                               ? 'bg-[#17231f] text-white hover:bg-[#263a34]'
                               : 'border border-[#d9cbbb] bg-[#efe4d6] text-[#665d52] hover:border-[#9b6d22]'
                           }`}
@@ -1500,7 +1564,7 @@ function App() {
                       onChange={(event) =>
                         setLoginForm((form) => ({ ...form, account: event.target.value }))
                       }
-                      placeholder="管理员账号或客户邮箱"
+                      placeholder="管理员账号、guest 或客户邮箱"
                     />
                   </label>
                   <label className="grid gap-2 text-sm font-semibold text-[#4d463c]">
@@ -1762,7 +1826,10 @@ function App() {
         </div>
       )}
 
-      {selectedMovie && (canViewDetails || selectedMovieIsPublic) && (
+      {selectedMovie &&
+        (canViewDetails ||
+          selectedMovieIsPublic ||
+          (isGuest && guestAccessibleMovieIds.has(selectedMovie.id))) && (
         <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#101916]/78 px-4 py-6 backdrop-blur-sm sm:py-10">
           <div className="mx-auto max-w-4xl border border-[#d9cbbb] bg-[#fffaf2] shadow-2xl">
             <div className="flex items-start justify-between gap-5 border-b border-[#d9cbbb] p-6 sm:p-8">
